@@ -227,70 +227,64 @@
 
                             <div class="sets-tracker">
                                 {#each Array(exercise.sets) as _, setIndex}
-                                    <div class="set-item">
-                                        <span class="set-label"
-                                            >Set {setIndex + 1}</span
-                                        >
-                                        {#if exercise.isUnilateral}
-                                            <div class="checkbox-group">
-                                                <label class="checkbox-label">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={isSetChecked(
-                                                            exercise.id,
-                                                            setIndex,
-                                                            "left",
-                                                        )}
-                                                        onchange={() =>
-                                                            toggleSet(
-                                                                exercise.id,
-                                                                setIndex,
-                                                                "left",
-                                                                exercise,
-                                                            )}
-                                                    />
-                                                    <span>L</span>
-                                                </label>
-                                                <label class="checkbox-label">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={isSetChecked(
-                                                            exercise.id,
-                                                            setIndex,
-                                                            "right",
-                                                        )}
-                                                        onchange={() =>
-                                                            toggleSet(
-                                                                exercise.id,
-                                                                setIndex,
-                                                                "right",
-                                                                exercise,
-                                                            )}
-                                                    />
-                                                    <span>R</span>
-                                                </label>
-                                            </div>
-                                        {:else}
-                                            <label class="checkbox-label">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={isSetChecked(
+                                    {#if exercise.isUnilateral}
+                                        <div class="checkbox-group">
+                                            <button
+                                                class="custom-checkbox"
+                                                class:checked={isSetChecked(
+                                                    exercise.id,
+                                                    setIndex,
+                                                    "left",
+                                                )}
+                                                onclick={() =>
+                                                    toggleSet(
                                                         exercise.id,
                                                         setIndex,
-                                                        "completed",
+                                                        "left",
+                                                        exercise,
                                                     )}
-                                                    onchange={() =>
-                                                        toggleSet(
-                                                            exercise.id,
-                                                            setIndex,
-                                                            "completed",
-                                                            exercise,
-                                                        )}
-                                                />
-                                                <span>✓</span>
-                                            </label>
-                                        {/if}
-                                    </div>
+                                            >
+                                                <span class="check-icon">✓</span>
+                                                <span class="check-label">L</span>
+                                            </button>
+                                            <button
+                                                class="custom-checkbox"
+                                                class:checked={isSetChecked(
+                                                    exercise.id,
+                                                    setIndex,
+                                                    "right",
+                                                )}
+                                                onclick={() =>
+                                                    toggleSet(
+                                                        exercise.id,
+                                                        setIndex,
+                                                        "right",
+                                                        exercise,
+                                                    )}
+                                            >
+                                                <span class="check-icon">✓</span>
+                                                <span class="check-label">R</span>
+                                            </button>
+                                        </div>
+                                    {:else}
+                                        <button
+                                            class="custom-checkbox"
+                                            class:checked={isSetChecked(
+                                                exercise.id,
+                                                setIndex,
+                                                "completed",
+                                            )}
+                                            onclick={() =>
+                                                toggleSet(
+                                                    exercise.id,
+                                                    setIndex,
+                                                    "completed",
+                                                    exercise,
+                                                )}
+                                        >
+                                            <span class="check-icon">✓</span>
+                                        </button>
+                                    {/if}
                                 {/each}
                             </div>
                         </div>
@@ -413,31 +407,32 @@
 
     .plan-selector {
         background: var(--card-bg);
-        padding: 20px;
-        border-radius: 12px;
-        margin-bottom: 20px;
+        padding: 24px;
+        border-radius: 16px;
+        margin-bottom: 24px;
         box-shadow: 0 4px 6px var(--card-shadow);
         display: flex;
         align-items: center;
-        gap: 15px;
+        gap: 20px;
     }
 
     .plan-selector label {
         font-weight: 600;
-        font-size: 1rem;
+        font-size: 1.15rem;
         color: var(--text-primary);
     }
 
     select {
         flex: 1;
-        padding: 10px 15px;
+        padding: 16px 20px;
         border: 2px solid var(--border-color);
-        border-radius: 8px;
-        font-size: 1rem;
+        border-radius: 12px;
+        font-size: 1.15rem;
         background: var(--card-bg);
         color: var(--text-primary);
         cursor: pointer;
         transition: border-color 0.2s;
+        min-height: 54px;
     }
 
     select:hover {
@@ -458,26 +453,26 @@
 
     .block {
         background: var(--card-bg);
-        border-radius: 12px;
-        padding: 20px;
+        border-radius: 16px;
+        padding: 24px;
         box-shadow: 0 4px 6px var(--card-shadow);
     }
 
     .block-header {
-        margin: 0 0 20px 0;
-        padding-bottom: 10px;
+        margin: 0 0 24px 0;
+        padding-bottom: 14px;
         border-bottom: 3px solid var(--accent-primary);
-        font-size: 1.5rem;
+        font-size: 1.6rem;
         color: var(--accent-primary);
         font-weight: 700;
     }
 
     .exercise {
-        padding: 15px;
+        padding: 20px;
         margin-bottom: 20px;
         background: var(--exercise-bg);
-        border-radius: 8px;
-        border-left: 4px solid var(--accent-secondary);
+        border-radius: 12px;
+        border-left: 5px solid var(--accent-secondary);
     }
 
     .exercise:last-child {
@@ -488,91 +483,115 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 12px;
+        margin-bottom: 16px;
     }
 
     .exercise-name {
         margin: 0;
-        font-size: 1.2rem;
+        font-size: 1.35rem;
         color: var(--text-primary);
         font-weight: 600;
+        line-height: 1.3;
     }
 
     .progress-badge {
         background: var(--accent-primary);
         color: white;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.9rem;
-        font-weight: 600;
+        padding: 8px 16px;
+        border-radius: 24px;
+        font-size: 1.05rem;
+        font-weight: 700;
+        min-width: 60px;
+        text-align: center;
     }
 
     .exercise-details {
         display: flex;
         flex-wrap: wrap;
-        gap: 15px;
-        margin-bottom: 10px;
-        font-size: 0.95rem;
+        gap: 16px;
+        margin-bottom: 14px;
+        font-size: 1.05rem;
         color: var(--text-secondary);
     }
 
     .notes {
         background: var(--notes-bg);
-        padding: 10px;
-        border-radius: 6px;
-        margin: 10px 0;
-        font-size: 0.9rem;
+        padding: 14px 16px;
+        border-radius: 10px;
+        margin: 14px 0;
+        font-size: 1.05rem;
         color: var(--notes-text);
-        border-left: 3px solid var(--notes-border);
+        border-left: 4px solid var(--notes-border);
+        line-height: 1.5;
     }
 
     .sets-tracker {
         display: flex;
         flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 15px;
-    }
-
-    .set-item {
-        display: flex;
+        gap: 16px;
+        margin-top: 18px;
         align-items: center;
-        gap: 8px;
-        background: var(--card-bg);
-        padding: 8px 12px;
-        border-radius: 6px;
-        border: 2px solid var(--border-color);
-    }
-
-    .set-label {
-        font-size: 0.9rem;
-        font-weight: 600;
-        color: var(--text-tertiary);
     }
 
     .checkbox-group {
         display: flex;
-        gap: 8px;
+        gap: 16px;
+        padding: 4px;
     }
 
-    .checkbox-label {
+    .custom-checkbox {
         display: flex;
+        flex-direction: column;
         align-items: center;
-        gap: 4px;
+        justify-content: center;
+        gap: 8px;
         cursor: pointer;
         user-select: none;
+        padding: 16px 20px;
+        background: var(--card-bg);
+        border-radius: 20px;
+        border: 4px solid var(--border-color);
+        transition: all 0.2s;
+        min-width: 85px;
+        min-height: 95px;
+        position: relative;
+        font-family: inherit;
     }
 
-    .checkbox-label input[type="checkbox"] {
-        width: 20px;
-        height: 20px;
-        cursor: pointer;
-        accent-color: var(--accent-primary);
+    .custom-checkbox:hover {
+        border-color: var(--accent-primary);
+        transform: translateY(-3px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
     }
 
-    .checkbox-label span {
-        font-size: 0.9rem;
-        font-weight: 600;
+    .custom-checkbox:active {
+        transform: scale(0.95);
+    }
+
+    .custom-checkbox .check-icon {
+        font-size: 2.5rem;
+        font-weight: 900;
+        color: var(--border-color);
+        transition: all 0.2s;
+        line-height: 1;
+    }
+
+    .custom-checkbox.checked .check-icon {
+        color: var(--accent-primary);
+        transform: scale(1.1);
+    }
+
+    .custom-checkbox.checked {
+        background: var(--exercise-bg);
+        border-color: var(--accent-primary);
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.25);
+    }
+
+    .custom-checkbox .check-label {
+        font-size: 1.1rem;
+        font-weight: 700;
         color: var(--text-primary);
+        text-transform: uppercase;
     }
 
     .empty-state {
@@ -662,15 +681,16 @@
 
     .timer-btn {
         flex: 1;
-        padding: 16px 32px;
-        font-size: 1.1rem;
-        font-weight: 600;
+        padding: 20px 36px;
+        font-size: 1.25rem;
+        font-weight: 700;
         border: none;
-        border-radius: 12px;
+        border-radius: 16px;
         cursor: pointer;
         transition: all 0.2s;
         text-transform: uppercase;
         letter-spacing: 1px;
+        min-height: 68px;
     }
 
     .timer-btn-primary {

@@ -12,7 +12,7 @@ export const workoutPlans: WorkoutPlan[] = [
                     {
                         id: 'a1',
                         name: 'Barbell Back Squat',
-                        sets: 4,
+                        sets: 3,
                         reps: '6-8',
                         weight: '80kg',
                         rest: '90s',
@@ -21,7 +21,7 @@ export const workoutPlans: WorkoutPlan[] = [
                     {
                         id: 'a2',
                         name: 'Romanian Deadlift',
-                        sets: 4,
+                        sets: 3,
                         reps: '8-10',
                         weight: '60kg',
                         rest: '90s',
@@ -69,7 +69,7 @@ export const workoutPlans: WorkoutPlan[] = [
                     {
                         id: 'c2',
                         name: 'Calf Raises',
-                        sets: 4,
+                        sets: 3,
                         reps: '15-20',
                         weight: '60kg',
                         rest: '45s',
@@ -90,7 +90,7 @@ export const workoutPlans: WorkoutPlan[] = [
                     {
                         id: 'a1-v2',
                         name: 'Front Squat',
-                        sets: 4,
+                        sets: 3,
                         reps: '8-10',
                         weight: '65kg',
                         rest: '2min',
@@ -99,7 +99,7 @@ export const workoutPlans: WorkoutPlan[] = [
                     {
                         id: 'a2-v2',
                         name: 'Leg Press',
-                        sets: 4,
+                        sets: 3,
                         reps: '12-15',
                         weight: '180kg',
                         rest: '90s',
@@ -123,7 +123,7 @@ export const workoutPlans: WorkoutPlan[] = [
                     {
                         id: 'b2-v2',
                         name: 'Hamstring Curl',
-                        sets: 4,
+                        sets: 3,
                         reps: '12-15',
                         weight: '50kg',
                         rest: '60s',
@@ -160,7 +160,7 @@ export const workoutPlans: WorkoutPlan[] = [
                     {
                         id: 'd1-v2',
                         name: 'Seated Calf Raise',
-                        sets: 4,
+                        sets: 3,
                         reps: '20-25',
                         weight: '40kg',
                         rest: '30s',
@@ -169,7 +169,7 @@ export const workoutPlans: WorkoutPlan[] = [
                     {
                         id: 'd2-v2',
                         name: 'Standing Calf Raise',
-                        sets: 4,
+                        sets: 3,
                         reps: '15-20',
                         weight: '70kg',
                         rest: '30s',
