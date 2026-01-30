@@ -3,6 +3,9 @@
     import { workoutPlans } from "$lib/data";
     import { loadState, updateProgress, setCurrentPlan } from "$lib/storage";
     import type { AppState, WorkoutPlan, Exercise } from "$lib/types";
+    import RestTimer from "$lib/components/RestTimer.svelte";
+    import ExerciseCard from "$lib/components/ExerciseCard.svelte";
+    import PlanSelector from "$lib/components/PlanSelector.svelte";
 
     let state = $state<AppState>({ currentPlanId: "", progress: {} });
     let currentPlan = $derived<WorkoutPlan | undefined>(
@@ -63,12 +66,6 @@
 
     function addTime() {
         timerSeconds += 30;
-    }
-
-    function formatTime(seconds: number): string {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, "0")}`;
     }
 
     function handlePlanChange(planId: string) {
@@ -138,22 +135,11 @@
 </script>
 
 <div class="container">
-    {#if workoutPlans.length > 0}
-        <div class="plan-selector">
-            <label for="plan-select">Workout Plan:</label>
-            <select
-                id="plan-select"
-                value={state.currentPlanId}
-                onchange={(e) => handlePlanChange(e.currentTarget.value)}
-            >
-                {#each workoutPlans as plan}
-                    <option value={plan.id}>
-                        {plan.name} - Started {plan.startDate}
-                    </option>
-                {/each}
-            </select>
-        </div>
-    {/if}
+    <PlanSelector
+        plans={workoutPlans}
+        currentPlanId={state.currentPlanId}
+        onChange={handlePlanChange}
+    />
 
     {#if currentPlan}
         <div class="workout">
@@ -163,103 +149,13 @@
 
                     {#each block.exercises as exercise}
                         {@const completed = getCompletedSets(exercise)}
-                        <div class="exercise">
-                            <div class="exercise-header">
-                                <h3 class="exercise-name">{exercise.name}</h3>
-                            </div>
-
-                            <div class="exercise-details">
-                                <span
-                                    ><strong>Sets:</strong>
-                                    {exercise.sets}</span
-                                >
-                                <span
-                                    ><strong>Reps:</strong>
-                                    {exercise.reps}</span
-                                >
-                                {#if exercise.weight}
-                                    <span
-                                        ><strong>Weight:</strong>
-                                        {exercise.weight}</span
-                                    >
-                                {/if}
-                                {#if exercise.rest}
-                                    <span
-                                        ><strong>Rest:</strong>
-                                        {exercise.rest}</span
-                                    >
-                                {/if}
-                            </div>
-
-                            {#if exercise.notes}
-                                <p class="notes">💡 {exercise.notes}</p>
-                            {/if}
-
-                            <div class="sets-tracker">
-                                {#each Array(exercise.sets) as _, setIndex}
-                                    {#if exercise.isUnilateral}
-                                        <div class="checkbox-group">
-                                            <button
-                                                class="custom-checkbox"
-                                                class:checked={isSetChecked(
-                                                    exercise.id,
-                                                    setIndex,
-                                                    "left",
-                                                )}
-                                                onclick={() =>
-                                                    toggleSet(
-                                                        exercise.id,
-                                                        setIndex,
-                                                        "left",
-                                                        exercise,
-                                                    )}
-                                            >
-                                                <span class="check-label"
-                                                    >L</span
-                                                >
-                                            </button>
-                                            <button
-                                                class="custom-checkbox"
-                                                class:checked={isSetChecked(
-                                                    exercise.id,
-                                                    setIndex,
-                                                    "right",
-                                                )}
-                                                onclick={() =>
-                                                    toggleSet(
-                                                        exercise.id,
-                                                        setIndex,
-                                                        "right",
-                                                        exercise,
-                                                    )}
-                                            >
-                                                <span class="check-label"
-                                                    >R</span
-                                                >
-                                            </button>
-                                        </div>
-                                    {:else}
-                                        <button
-                                            class="custom-checkbox"
-                                            class:checked={isSetChecked(
-                                                exercise.id,
-                                                setIndex,
-                                                "completed",
-                                            )}
-                                            onclick={() =>
-                                                toggleSet(
-                                                    exercise.id,
-                                                    setIndex,
-                                                    "completed",
-                                                    exercise,
-                                                )}
-                                        >
-                                            <span class="check-icon">✓</span>
-                                        </button>
-                                    {/if}
-                                {/each}
-                            </div>
-                        </div>
+                        <ExerciseCard
+                            {exercise}
+                            {completed}
+                            {isSetChecked}
+                            onToggleSet={(exerciseId, setIndex, type) =>
+                                toggleSet(exerciseId, setIndex, type, exercise)}
+                        />
                     {/each}
                 </div>
             {/each}
@@ -269,34 +165,13 @@
     {/if}
 </div>
 
-{#if showTimer}
-    <div class="timer-overlay" onclick={stopTimer}>
-        <div class="timer-content" onclick={(e) => e.stopPropagation()}>
-            <div class="timer-display">
-                <div class="timer-text">{formatTime(timerSeconds)}</div>
-                <div class="timer-label">Rest Time</div>
-            </div>
-
-            <div class="timer-progress">
-                <div
-                    class="timer-progress-bar"
-                    style="width: {initialTimerSeconds > 0
-                        ? (timerSeconds / initialTimerSeconds) * 100
-                        : 0}%"
-                ></div>
-            </div>
-
-            <div class="timer-actions">
-                <button class="timer-btn timer-btn-secondary" onclick={addTime}>
-                    +30s
-                </button>
-                <button class="timer-btn timer-btn-primary" onclick={stopTimer}>
-                    Skip Rest
-                </button>
-            </div>
-        </div>
-    </div>
-{/if}
+<RestTimer
+    show={showTimer}
+    seconds={timerSeconds}
+    initialSeconds={initialTimerSeconds}
+    onStop={stopTimer}
+    onAddTime={addTime}
+/>
 
 <style>
     :global(:root) {
@@ -358,65 +233,6 @@
         padding: 20px;
     }
 
-    header {
-        text-align: center;
-        color: var(--text-header);
-        margin-bottom: 30px;
-        padding: 20px 0;
-    }
-
-    h1 {
-        font-size: 2.5rem;
-        margin: 0 0 10px 0;
-        font-weight: 800;
-    }
-
-    .subtitle {
-        margin: 0;
-        font-size: 1.1rem;
-        opacity: 0.9;
-    }
-
-    .plan-selector {
-        background: var(--card-bg);
-        padding: 24px;
-        border-radius: 16px;
-        margin-bottom: 24px;
-        box-shadow: 0 4px 6px var(--card-shadow);
-        display: flex;
-        align-items: center;
-        gap: 20px;
-    }
-
-    .plan-selector label {
-        font-weight: 600;
-        font-size: 1.15rem;
-        color: var(--text-primary);
-    }
-
-    select {
-        flex: 1;
-        padding: 16px 20px;
-        border: 2px solid var(--border-color);
-        border-radius: 12px;
-        font-size: 1.15rem;
-        background: var(--card-bg);
-        color: var(--text-primary);
-        cursor: pointer;
-        transition: border-color 0.2s;
-        min-height: 54px;
-    }
-
-    select:hover {
-        border-color: var(--accent-primary);
-    }
-
-    select:focus {
-        outline: none;
-        border-color: var(--accent-primary);
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
-
     .workout {
         display: flex;
         flex-direction: column;
@@ -439,154 +255,6 @@
         font-weight: 700;
     }
 
-    .exercise {
-        padding: 20px;
-        margin-bottom: 20px;
-        background: var(--exercise-bg);
-        border-radius: 12px;
-        border-left: 5px solid var(--accent-secondary);
-    }
-
-    .exercise:last-child {
-        margin-bottom: 0;
-    }
-
-    .exercise-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 16px;
-    }
-
-    .exercise-name {
-        margin: 0;
-        font-size: 1.35rem;
-        color: var(--text-primary);
-        font-weight: 600;
-        line-height: 1.3;
-    }
-
-    .progress-badge {
-        background: var(--accent-primary);
-        color: white;
-        padding: 8px 16px;
-        border-radius: 24px;
-        font-size: 1.05rem;
-        font-weight: 700;
-        min-width: 60px;
-        text-align: center;
-    }
-
-    .exercise-details {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 16px;
-        margin-bottom: 14px;
-        font-size: 1.05rem;
-        color: var(--text-secondary);
-    }
-
-    .notes {
-        background: var(--notes-bg);
-        padding: 14px 16px;
-        border-radius: 10px;
-        margin: 14px 0;
-        font-size: 1.05rem;
-        color: var(--notes-text);
-        border-left: 4px solid var(--notes-border);
-        line-height: 1.5;
-    }
-
-    .sets-tracker {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 16px;
-        margin-top: 18px;
-        align-items: center;
-    }
-
-    .checkbox-group {
-        display: flex;
-        gap: 6px;
-        padding: 8px;
-        background: var(--exercise-bg);
-        border-radius: 20px;
-        border: 2px solid var(--border-color);
-        flex-shrink: 0;
-    }
-
-    .custom-checkbox {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        cursor: pointer;
-        user-select: none;
-        padding: 16px 20px;
-        background: var(--card-bg);
-        border-radius: 16px;
-        border: 3px solid transparent;
-        transition: all 0.2s;
-        min-width: 75px;
-        max-width: 85px;
-        flex: 1;
-        min-height: 95px;
-        position: relative;
-        font-family: inherit;
-    }
-
-    .custom-checkbox:hover {
-        border-color: var(--accent-primary);
-        transform: translateY(-3px);
-        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
-    }
-
-    .custom-checkbox:active {
-        transform: scale(0.95);
-    }
-
-    .custom-checkbox .check-icon {
-        font-size: 2.5rem;
-        font-weight: 900;
-        color: var(--border-color);
-        transition: all 0.2s;
-        line-height: 1;
-    }
-
-    .custom-checkbox.checked .check-icon {
-        color: var(--accent-primary);
-        transform: scale(1.1);
-    }
-
-    .custom-checkbox.checked {
-        background: var(--accent-primary);
-        border-color: var(--accent-primary);
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-    }
-
-    .custom-checkbox.checked .check-icon {
-        color: white;
-    }
-
-    .custom-checkbox.checked .check-label {
-        color: white;
-    }
-
-    .custom-checkbox .check-label {
-        font-size: 2.5rem;
-        font-weight: 900;
-        color: var(--border-color);
-        text-transform: uppercase;
-        transition: all 0.2s;
-        line-height: 1;
-    }
-
-    .custom-checkbox.checked .check-label {
-        color: white;
-        transform: scale(1.1);
-    }
-
     .empty-state {
         text-align: center;
         color: var(--text-header);
@@ -594,156 +262,9 @@
         padding: 40px;
     }
 
-    /* Rest Timer Styles */
-    .timer-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.95);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 1000;
-        backdrop-filter: blur(10px);
-        animation: fadeIn 0.3s ease-out;
-    }
-
-    @keyframes fadeIn {
-        from {
-            opacity: 0;
-        }
-        to {
-            opacity: 1;
-        }
-    }
-
-    .timer-content {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 40px;
-        padding: 40px;
-        max-width: 500px;
-        width: 90%;
-    }
-
-    .timer-display {
-        text-align: center;
-    }
-
-    .timer-text {
-        font-size: 6rem;
-        font-weight: 800;
-        color: #ffffff;
-        line-height: 1;
-        margin-bottom: 10px;
-        font-variant-numeric: tabular-nums;
-        text-shadow: 0 0 30px rgba(102, 126, 234, 0.5);
-    }
-
-    .timer-label {
-        font-size: 1.5rem;
-        color: rgba(255, 255, 255, 0.7);
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-    }
-
-    .timer-progress {
-        width: 100%;
-        height: 8px;
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 4px;
-        overflow: hidden;
-    }
-
-    .timer-progress-bar {
-        height: 100%;
-        background: linear-gradient(90deg, #667eea, #764ba2);
-        transition: width 1s linear;
-        border-radius: 4px;
-    }
-
-    .timer-actions {
-        display: flex;
-        gap: 20px;
-        width: 100%;
-    }
-
-    .timer-btn {
-        flex: 1;
-        padding: 20px 36px;
-        font-size: 1.25rem;
-        font-weight: 700;
-        border: none;
-        border-radius: 16px;
-        cursor: pointer;
-        transition: all 0.2s;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        min-height: 68px;
-    }
-
-    .timer-btn-primary {
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        color: white;
-    }
-
-    .timer-btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
-    }
-
-    .timer-btn-secondary {
-        background: rgba(255, 255, 255, 0.1);
-        color: white;
-        border: 2px solid rgba(255, 255, 255, 0.3);
-    }
-
-    .timer-btn-secondary:hover {
-        background: rgba(255, 255, 255, 0.2);
-        border-color: rgba(255, 255, 255, 0.5);
-    }
-
-    .timer-btn:active {
-        transform: scale(0.98);
-    }
-
     @media (max-width: 640px) {
         .container {
             padding: 15px;
-        }
-
-        h1 {
-            font-size: 2rem;
-        }
-
-        .plan-selector {
-            flex-direction: column;
-            align-items: stretch;
-        }
-
-        .exercise-details {
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .sets-tracker {
-            justify-content: center;
-            gap: 12px;
-        }
-
-        .custom-checkbox {
-            min-width: 70px;
-            max-width: 80px;
-            min-height: 85px;
-            padding: 14px 16px;
-        }
-
-        .checkbox-group {
-            padding: 6px;
         }
     }
 </style>
