@@ -98,23 +98,8 @@
 
         // Start rest timer when checking a set (not unchecking)
         if (newValue) {
-            // For unilateral exercises, only start timer when both sides are checked
-            if (exercise.isUnilateral) {
-                const otherSide = type === "left" ? "right" : "left";
-                const otherSideChecked =
-                    state.progress[currentPlan.id]?.[exerciseId]?.[setIndex]?.[
-                        otherSide
-                    ] ?? false;
-
-                if (otherSideChecked) {
-                    const restSeconds = exercise.rest ?? 0;
-                    startRestTimer(restSeconds);
-                }
-            } else {
-                // For regular exercises, start timer immediately
-                const restSeconds = exercise.rest ?? 0;
-                startRestTimer(restSeconds);
-            }
+            const restSeconds = exercise.rest ?? 0;
+            startRestTimer(restSeconds);
         }
     }
 
