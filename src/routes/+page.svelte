@@ -30,18 +30,6 @@
         }
     });
 
-    function parseRestTime(rest: string | undefined): number {
-        if (!rest) return 0;
-
-        const match = rest.match(/(\d+)(s|min)/);
-        if (!match) return 0;
-
-        const value = parseInt(match[1]);
-        const unit = match[2];
-
-        return unit === "min" ? value * 60 : value;
-    }
-
     function startRestTimer(seconds: number) {
         if (seconds === 0) return;
 
@@ -119,12 +107,12 @@
                     ] ?? false;
 
                 if (otherSideChecked) {
-                    const restSeconds = parseRestTime(exercise.rest);
+                    const restSeconds = exercise.rest ?? 0;
                     startRestTimer(restSeconds);
                 }
             } else {
                 // For regular exercises, start timer immediately
-                const restSeconds = parseRestTime(exercise.rest);
+                const restSeconds = exercise.rest ?? 0;
                 startRestTimer(restSeconds);
             }
         }
@@ -244,8 +232,11 @@
                                                         exercise,
                                                     )}
                                             >
-                                                <span class="check-icon">✓</span>
-                                                <span class="check-label">L</span>
+                                                <span class="check-icon">✓</span
+                                                >
+                                                <span class="check-label"
+                                                    >L</span
+                                                >
                                             </button>
                                             <button
                                                 class="custom-checkbox"
@@ -262,8 +253,11 @@
                                                         exercise,
                                                     )}
                                             >
-                                                <span class="check-icon">✓</span>
-                                                <span class="check-label">R</span>
+                                                <span class="check-icon">✓</span
+                                                >
+                                                <span class="check-label"
+                                                    >R</span
+                                                >
                                             </button>
                                         </div>
                                     {:else}

@@ -4,7 +4,7 @@ export interface Exercise {
     sets: number;
     reps: string;
     weight?: string;
-    rest?: string;
+    rest?: number; // Rest time in seconds
     notes?: string;
     isUnilateral?: boolean; // For exercises that track L/R separately
 }
