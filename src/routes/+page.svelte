@@ -76,11 +76,6 @@
 </script>
 
 <div class="container">
-    <header>
-        <h1>🐰 Gym Rabbit</h1>
-        <p class="subtitle">Track your workout progress</p>
-    </header>
-
     {#if workoutPlans.length > 0}
         <div class="plan-selector">
             <label for="plan-select">Workout Plan:</label>
@@ -217,12 +212,56 @@
 </div>
 
 <style>
+    :global(:root) {
+        /* Light mode colors */
+        --bg-gradient-start: #667eea;
+        --bg-gradient-end: #764ba2;
+        --card-bg: #ffffff;
+        --card-shadow: rgba(0, 0, 0, 0.1);
+        --text-primary: #333333;
+        --text-secondary: #555555;
+        --text-tertiary: #666666;
+        --text-header: #ffffff;
+        --border-color: #e0e0e0;
+        --exercise-bg: #f8f9fa;
+        --notes-bg: #ffffff;
+        --notes-border: #fbbf24;
+        --notes-text: #666666;
+        --accent-primary: #667eea;
+        --accent-secondary: #764ba2;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        :global(:root) {
+            /* Dark mode colors */
+            --bg-gradient-start: #1a1a2e;
+            --bg-gradient-end: #16213e;
+            --card-bg: #2d2d44;
+            --card-shadow: rgba(0, 0, 0, 0.3);
+            --text-primary: #e4e4e7;
+            --text-secondary: #d4d4d8;
+            --text-tertiary: #a1a1aa;
+            --text-header: #ffffff;
+            --border-color: #3f3f46;
+            --exercise-bg: #1f1f2e;
+            --notes-bg: #27273a;
+            --notes-border: #fbbf24;
+            --notes-text: #d4d4d8;
+            --accent-primary: #818cf8;
+            --accent-secondary: #a78bfa;
+        }
+    }
+
     :global(body) {
         margin: 0;
         padding: 0;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
             "Helvetica Neue", Arial, sans-serif;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(
+            135deg,
+            var(--bg-gradient-start) 0%,
+            var(--bg-gradient-end) 100%
+        );
         min-height: 100vh;
     }
 
@@ -234,7 +273,7 @@
 
     header {
         text-align: center;
-        color: white;
+        color: var(--text-header);
         margin-bottom: 30px;
         padding: 20px 0;
     }
@@ -252,11 +291,11 @@
     }
 
     .plan-selector {
-        background: white;
+        background: var(--card-bg);
         padding: 20px;
         border-radius: 12px;
         margin-bottom: 20px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 4px 6px var(--card-shadow);
         display: flex;
         align-items: center;
         gap: 15px;
@@ -265,27 +304,28 @@
     .plan-selector label {
         font-weight: 600;
         font-size: 1rem;
-        color: #333;
+        color: var(--text-primary);
     }
 
     select {
         flex: 1;
         padding: 10px 15px;
-        border: 2px solid #e0e0e0;
+        border: 2px solid var(--border-color);
         border-radius: 8px;
         font-size: 1rem;
-        background: white;
+        background: var(--card-bg);
+        color: var(--text-primary);
         cursor: pointer;
         transition: border-color 0.2s;
     }
 
     select:hover {
-        border-color: #667eea;
+        border-color: var(--accent-primary);
     }
 
     select:focus {
         outline: none;
-        border-color: #667eea;
+        border-color: var(--accent-primary);
         box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
     }
 
@@ -296,27 +336,27 @@
     }
 
     .block {
-        background: white;
+        background: var(--card-bg);
         border-radius: 12px;
         padding: 20px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 4px 6px var(--card-shadow);
     }
 
     .block-header {
         margin: 0 0 20px 0;
         padding-bottom: 10px;
-        border-bottom: 3px solid #667eea;
+        border-bottom: 3px solid var(--accent-primary);
         font-size: 1.5rem;
-        color: #667eea;
+        color: var(--accent-primary);
         font-weight: 700;
     }
 
     .exercise {
         padding: 15px;
         margin-bottom: 20px;
-        background: #f8f9fa;
+        background: var(--exercise-bg);
         border-radius: 8px;
-        border-left: 4px solid #764ba2;
+        border-left: 4px solid var(--accent-secondary);
     }
 
     .exercise:last-child {
@@ -333,12 +373,12 @@
     .exercise-name {
         margin: 0;
         font-size: 1.2rem;
-        color: #333;
+        color: var(--text-primary);
         font-weight: 600;
     }
 
     .progress-badge {
-        background: #667eea;
+        background: var(--accent-primary);
         color: white;
         padding: 4px 12px;
         border-radius: 20px;
@@ -352,17 +392,17 @@
         gap: 15px;
         margin-bottom: 10px;
         font-size: 0.95rem;
-        color: #555;
+        color: var(--text-secondary);
     }
 
     .notes {
-        background: white;
+        background: var(--notes-bg);
         padding: 10px;
         border-radius: 6px;
         margin: 10px 0;
         font-size: 0.9rem;
-        color: #666;
-        border-left: 3px solid #fbbf24;
+        color: var(--notes-text);
+        border-left: 3px solid var(--notes-border);
     }
 
     .sets-tracker {
@@ -376,16 +416,16 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        background: white;
+        background: var(--card-bg);
         padding: 8px 12px;
         border-radius: 6px;
-        border: 2px solid #e0e0e0;
+        border: 2px solid var(--border-color);
     }
 
     .set-label {
         font-size: 0.9rem;
         font-weight: 600;
-        color: #666;
+        color: var(--text-tertiary);
     }
 
     .checkbox-group {
@@ -405,18 +445,18 @@
         width: 20px;
         height: 20px;
         cursor: pointer;
-        accent-color: #667eea;
+        accent-color: var(--accent-primary);
     }
 
     .checkbox-label span {
         font-size: 0.9rem;
         font-weight: 600;
-        color: #333;
+        color: var(--text-primary);
     }
 
     .empty-state {
         text-align: center;
-        color: white;
+        color: var(--text-header);
         font-size: 1.2rem;
         padding: 40px;
     }
