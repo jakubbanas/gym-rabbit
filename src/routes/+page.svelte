@@ -232,8 +232,6 @@
                                                         exercise,
                                                     )}
                                             >
-                                                <span class="check-icon">✓</span
-                                                >
                                                 <span class="check-label"
                                                     >L</span
                                                 >
@@ -253,8 +251,6 @@
                                                         exercise,
                                                     )}
                                             >
-                                                <span class="check-icon">✓</span
-                                                >
                                                 <span class="check-label"
                                                     >R</span
                                                 >
@@ -529,8 +525,11 @@
 
     .checkbox-group {
         display: flex;
-        gap: 16px;
-        padding: 4px;
+        gap: 6px;
+        padding: 8px;
+        background: var(--exercise-bg);
+        border-radius: 20px;
+        border: 2px solid var(--border-color);
     }
 
     .custom-checkbox {
@@ -543,8 +542,8 @@
         user-select: none;
         padding: 16px 20px;
         background: var(--card-bg);
-        border-radius: 20px;
-        border: 4px solid var(--border-color);
+        border-radius: 16px;
+        border: 3px solid transparent;
         transition: all 0.2s;
         min-width: 85px;
         min-height: 95px;
@@ -576,16 +575,31 @@
     }
 
     .custom-checkbox.checked {
-        background: var(--exercise-bg);
+        background: var(--accent-primary);
         border-color: var(--accent-primary);
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.25);
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .custom-checkbox.checked .check-icon {
+        color: white;
+    }
+
+    .custom-checkbox.checked .check-label {
+        color: white;
     }
 
     .custom-checkbox .check-label {
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: var(--text-primary);
+        font-size: 2.5rem;
+        font-weight: 900;
+        color: var(--border-color);
         text-transform: uppercase;
+        transition: all 0.2s;
+        line-height: 1;
+    }
+
+    .custom-checkbox.checked .check-label {
+        color: white;
+        transform: scale(1.1);
     }
 
     .empty-state {
