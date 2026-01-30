@@ -14,11 +14,36 @@
         const s = secs % 60;
         return `${mins}:${s.toString().padStart(2, "0")}`;
     }
+
+    function handleKeyDown(event: KeyboardEvent) {
+        if (event.key === "Escape") {
+            onStop();
+        }
+    }
+
+    function handleContentKeyDown(event: KeyboardEvent) {
+        // Stop propagation for keyboard events on content
+        event.stopPropagation();
+    }
 </script>
 
 {#if show}
-    <div class="timer-overlay" onclick={onStop}>
-        <div class="timer-content" onclick={(e) => e.stopPropagation()}>
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <div
+        class="timer-overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Rest timer"
+        onclick={onStop}
+        onkeydown={handleKeyDown}
+        tabindex="-1"
+    >
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+            class="timer-content"
+            onclick={(e) => e.stopPropagation()}
+            onkeydown={handleContentKeyDown}
+        >
             <div class="timer-display">
                 <div class="timer-text">{formatTime(seconds)}</div>
                 <div class="timer-label">Rest Time</div>
