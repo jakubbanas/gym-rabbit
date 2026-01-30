@@ -166,9 +166,6 @@
                         <div class="exercise">
                             <div class="exercise-header">
                                 <h3 class="exercise-name">{exercise.name}</h3>
-                                <span class="progress-badge">
-                                    {completed}/{exercise.sets}
-                                </span>
                             </div>
 
                             <div class="exercise-details">
@@ -515,6 +512,7 @@
         background: var(--exercise-bg);
         border-radius: 20px;
         border: 2px solid var(--border-color);
+        flex-shrink: 0;
     }
 
     .custom-checkbox {
@@ -530,7 +528,9 @@
         border-radius: 16px;
         border: 3px solid transparent;
         transition: all 0.2s;
-        min-width: 85px;
+        min-width: 75px;
+        max-width: 85px;
+        flex: 1;
         min-height: 95px;
         position: relative;
         font-family: inherit;
@@ -731,11 +731,19 @@
         }
 
         .sets-tracker {
-            flex-direction: column;
+            justify-content: center;
+            gap: 12px;
         }
 
-        .set-item {
-            justify-content: space-between;
+        .custom-checkbox {
+            min-width: 70px;
+            max-width: 80px;
+            min-height: 85px;
+            padding: 14px 16px;
+        }
+
+        .checkbox-group {
+            padding: 6px;
         }
     }
 </style>
