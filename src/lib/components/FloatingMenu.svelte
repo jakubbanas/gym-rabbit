@@ -19,6 +19,7 @@
 
     const menuItems = [
         { id: "change-plan", label: "Change Plan", icon: "📋" },
+        { id: "pace-calculator", label: "Pace Calculator", icon: "🏃" },
         { id: "reset-progress", label: "Reset Progress", icon: "🔄" },
         { id: "export-data", label: "Export Data", icon: "📤" },
         { id: "import-data", label: "Import Data", icon: "📥" },
@@ -29,6 +30,8 @@
     function handleMenuItemClick(itemId: string) {
         if (itemId === "change-plan") {
             goto("/plans");
+        } else if (itemId === "pace-calculator") {
+            goto("/pace-calculator");
         } else {
             console.log(`Menu item clicked: ${itemId}`);
             // TODO: Implement menu item actions
