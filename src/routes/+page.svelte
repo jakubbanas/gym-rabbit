@@ -238,10 +238,6 @@
 
     .header {
         margin-bottom: 25px;
-        padding: 20px;
-        background: var(--card-bg);
-        border-radius: 16px;
-        box-shadow: 0 4px 6px var(--card-shadow);
         text-align: center;
     }
 
@@ -261,17 +257,14 @@
     .block {
         background: var(--card-bg);
         border-radius: 16px;
-        padding: 24px;
         box-shadow: 0 4px 6px var(--card-shadow);
     }
 
     .block-header {
-        margin: 0 0 24px 0;
-        padding-bottom: 14px;
-        border-bottom: 3px solid var(--accent-primary);
         font-size: 1.6rem;
         color: var(--accent-primary);
         font-weight: 700;
+        text-align: center;
     }
 
     .empty-state {
