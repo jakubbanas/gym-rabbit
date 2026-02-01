@@ -1,14 +1,19 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
+    import { goto } from "$app/navigation";
     import { workoutPlans } from "$lib/data";
-    import { loadState, updateProgress, setCurrentPlan } from "$lib/storage";
+    import { loadState, updateProgress } from "$lib/storage";
     import type { AppState, WorkoutPlan, Exercise } from "$lib/types";
     import RestTimer from "$lib/components/RestTimer.svelte";
     import ExerciseCard from "$lib/components/ExerciseCard.svelte";
-    import PlanSelector from "$lib/components/PlanSelector.svelte";
+    import FloatingMenu from "$lib/components/FloatingMenu.svelte";
 
-    let state = $state<AppState>({ currentPlanId: "", progress: {} });
-    let currentPlan = $derived<WorkoutPlan | undefined>(
+    // @ts-expect-error - svelte-check has issues with $state rune typing
+    let state = $state({
+        currentPlanId: "",
+        progress: {} as Record<string, any>,
+    });
+    let currentPlan = $derived(
         workoutPlans.find((p) => p.id === state.currentPlanId),
     );
 
@@ -19,11 +24,13 @@
     let timerInterval: number | null = null;
 
     onMount(() => {
-        state = loadState();
+        const loaded = loadState();
+        state.currentPlanId = loaded.currentPlanId;
+        state.progress = loaded.progress;
 
-        // Set first plan as default if none selected
-        if (!state.currentPlanId && workoutPlans.length > 0) {
-            state = setCurrentPlan(workoutPlans[0].id);
+        // Redirect to plan selector if no plan is selected
+        if (!state.currentPlanId) {
+            goto("/plans");
         }
     });
 
@@ -66,10 +73,6 @@
 
     function addTime() {
         timerSeconds += 30;
-    }
-
-    function handlePlanChange(planId: string) {
-        state = setCurrentPlan(planId);
     }
 
     function toggleSet(
@@ -135,13 +138,14 @@
 </script>
 
 <div class="container">
-    <PlanSelector
-        plans={workoutPlans}
-        currentPlanId={state.currentPlanId}
-        onChange={handlePlanChange}
-    />
-
     {#if currentPlan}
+        <div class="header">
+            <h1 class="plan-title">{currentPlan.name}</h1>
+            <button class="change-plan-btn" onclick={() => goto("/plans")}>
+                Change Plan
+            </button>
+        </div>
+
         <div class="workout">
             {#each currentPlan.blocks as block}
                 <div class="block">
@@ -161,7 +165,7 @@
             {/each}
         </div>
     {:else}
-        <p class="empty-state">No workout plans available</p>
+        <p class="empty-state">Loading workout...</p>
     {/if}
 </div>
 
@@ -172,6 +176,8 @@
     onStop={stopTimer}
     onAddTime={addTime}
 />
+
+<FloatingMenu />
 
 <style>
     :global(:root) {
@@ -233,6 +239,49 @@
         padding: 20px;
     }
 
+    .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 25px;
+        padding: 20px;
+        background: var(--card-bg);
+        border-radius: 16px;
+        box-shadow: 0 4px 6px var(--card-shadow);
+    }
+
+    .plan-title {
+        margin: 0;
+        font-size: 1.8rem;
+        font-weight: 800;
+        color: var(--accent-primary);
+    }
+
+    .change-plan-btn {
+        padding: 12px 24px;
+        font-size: 1rem;
+        font-weight: 600;
+        background: transparent;
+        color: var(--accent-primary);
+        border: 2px solid var(--accent-primary);
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-family: inherit;
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    .change-plan-btn:hover {
+        background: var(--accent-primary);
+        color: white;
+        transform: translateY(-2px);
+    }
+
+    .change-plan-btn:active {
+        transform: scale(0.98);
+    }
+
     .workout {
         display: flex;
         flex-direction: column;
@@ -265,6 +314,16 @@
     @media (max-width: 640px) {
         .container {
             padding: 15px;
+        }
+
+        .header {
+            flex-direction: column;
+            gap: 15px;
+            align-items: stretch;
+        }
+
+        .change-plan-btn {
+            width: 100%;
         }
     }
 </style>
