@@ -1,7 +1,9 @@
 <script lang="ts">
     import { goto } from "$app/navigation";
+    import { resetProgress } from "$lib/storage";
 
     let showMenu = $state(false);
+    let showResetConfirm = $state(false);
 
     function toggleMenu() {
         showMenu = !showMenu;
@@ -21,10 +23,6 @@
         { id: "change-plan", label: "Change Plan", icon: "📋" },
         { id: "pace-calculator", label: "Pace Calculator", icon: "🏃" },
         { id: "reset-progress", label: "Reset Progress", icon: "🔄" },
-        { id: "export-data", label: "Export Data", icon: "📤" },
-        { id: "import-data", label: "Import Data", icon: "📥" },
-        { id: "clear-all", label: "Clear All Data", icon: "🗑️" },
-        { id: "about", label: "About", icon: "ℹ️" },
     ];
 
     function handleMenuItemClick(itemId: string) {
@@ -32,11 +30,24 @@
             goto("/plans");
         } else if (itemId === "pace-calculator") {
             goto("/pace-calculator");
+        } else if (itemId === "reset-progress") {
+            showResetConfirm = true;
         } else {
             console.log(`Menu item clicked: ${itemId}`);
             // TODO: Implement menu item actions
         }
         closeMenu();
+    }
+
+    function confirmReset() {
+        resetProgress();
+        showResetConfirm = false;
+        // Reload the page to reflect changes
+        window.location.reload();
+    }
+
+    function cancelReset() {
+        showResetConfirm = false;
     }
 </script>
 
@@ -68,6 +79,33 @@
                 <span class="menu-label">{item.label}</span>
             </button>
         {/each}
+    </div>
+{/if}
+
+<!-- Reset Confirmation Dialog -->
+{#if showResetConfirm}
+    <button
+        class="dialog-backdrop"
+        onclick={cancelReset}
+        onkeydown={(e) => {
+            if (e.key === "Escape") cancelReset();
+        }}
+        aria-label="Close dialog"
+    ></button>
+    <div class="dialog" role="dialog" aria-modal="true">
+        <h3 class="dialog-title">Reset Progress?</h3>
+        <p class="dialog-message">
+            This will clear all your workout progress. This action cannot be
+            undone.
+        </p>
+        <div class="dialog-actions">
+            <button class="dialog-btn cancel-btn" onclick={cancelReset}>
+                Cancel
+            </button>
+            <button class="dialog-btn confirm-btn" onclick={confirmReset}>
+                Reset All Progress
+            </button>
+        </div>
     </div>
 {/if}
 
@@ -203,6 +241,111 @@
     .floating-btn-icon {
         font-size: 1.8rem;
         transition: transform 0.2s;
+    }
+
+    .dialog-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+        z-index: 1000;
+        animation: fadeIn 0.2s;
+        border: none;
+        cursor: pointer;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+        to {
+            opacity: 1;
+        }
+    }
+
+    .dialog {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: var(--card-bg);
+        border-radius: 20px;
+        padding: 32px;
+        z-index: 1001;
+        max-width: 400px;
+        width: calc(100% - 40px);
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        animation: slideIn 0.3s ease-out;
+    }
+
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translate(-50%, -45%);
+        }
+        to {
+            opacity: 1;
+            transform: translate(-50%, -50%);
+        }
+    }
+
+    .dialog-title {
+        margin: 0 0 16px 0;
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .dialog-message {
+        margin: 0 0 28px 0;
+        font-size: 1rem;
+        line-height: 1.6;
+        color: var(--text-secondary);
+    }
+
+    .dialog-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+    }
+
+    .dialog-btn {
+        padding: 14px 24px;
+        font-size: 1rem;
+        font-weight: 600;
+        border: none;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-family: inherit;
+        min-height: 44px;
+    }
+
+    .cancel-btn {
+        background: var(--exercise-bg);
+        color: var(--text-primary);
+    }
+
+    .cancel-btn:hover {
+        background: var(--border-color);
+        transform: translateY(-1px);
+    }
+
+    .confirm-btn {
+        background: #ef4444;
+        color: white;
+    }
+
+    .confirm-btn:hover {
+        background: #dc2626;
+        transform: translateY(-1px);
+    }
+
+    .dialog-btn:active {
+        transform: scale(0.98);
     }
 
     @media (max-width: 640px) {

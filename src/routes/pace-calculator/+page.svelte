@@ -8,9 +8,9 @@
     let kmhResult = $derived(() => {
         const mins = parseFloat(minKmMinutes);
         const secs = parseFloat(minKmSeconds) || 0;
-        
+
         if (isNaN(mins) || mins <= 0) return "";
-        
+
         const totalMinutes = mins + secs / 60;
         const kmh = 60 / totalMinutes;
         return kmh.toFixed(2);
@@ -18,13 +18,13 @@
 
     let minKmResult = $derived(() => {
         const speed = parseFloat(kmhInput);
-        
+
         if (isNaN(speed) || speed <= 0) return { minutes: "", seconds: "" };
-        
+
         const paceMinutes = 60 / speed;
         const mins = Math.floor(paceMinutes);
         const secs = Math.round((paceMinutes - mins) * 60);
-        
+
         return {
             minutes: mins.toString(),
             seconds: secs.toString().padStart(2, "0"),
@@ -275,7 +275,11 @@
     }
 
     .result {
-        background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+        background: linear-gradient(
+            135deg,
+            var(--accent-primary),
+            var(--accent-secondary)
+        );
         color: white;
         padding: 20px;
         border-radius: 12px;

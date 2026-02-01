@@ -74,3 +74,10 @@ export function getExerciseProgress(
     const state = loadState();
     return state.progress[planId]?.[exerciseId];
 }
+
+export function resetProgress(): AppState {
+    const state = loadState();
+    state.progress = {};
+    saveState(state);
+    return state;
+}
