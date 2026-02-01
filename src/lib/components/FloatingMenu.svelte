@@ -1,4 +1,6 @@
 <script lang="ts">
+    import { goto } from "$app/navigation";
+
     let showMenu = $state(false);
 
     function toggleMenu() {
@@ -16,6 +18,7 @@
     }
 
     const menuItems = [
+        { id: "change-plan", label: "Change Plan", icon: "📋" },
         { id: "reset-progress", label: "Reset Progress", icon: "🔄" },
         { id: "export-data", label: "Export Data", icon: "📤" },
         { id: "import-data", label: "Import Data", icon: "📥" },
@@ -24,8 +27,12 @@
     ];
 
     function handleMenuItemClick(itemId: string) {
-        console.log(`Menu item clicked: ${itemId}`);
-        // TODO: Implement menu item actions
+        if (itemId === "change-plan") {
+            goto("/plans");
+        } else {
+            console.log(`Menu item clicked: ${itemId}`);
+            // TODO: Implement menu item actions
+        }
         closeMenu();
     }
 </script>

@@ -141,9 +141,6 @@
     {#if currentPlan}
         <div class="header">
             <h1 class="plan-title">{currentPlan.name}</h1>
-            <button class="change-plan-btn" onclick={() => goto("/plans")}>
-                Change Plan
-            </button>
         </div>
 
         <div class="workout">
@@ -240,14 +237,12 @@
     }
 
     .header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
         margin-bottom: 25px;
         padding: 20px;
         background: var(--card-bg);
         border-radius: 16px;
         box-shadow: 0 4px 6px var(--card-shadow);
+        text-align: center;
     }
 
     .plan-title {
@@ -255,31 +250,6 @@
         font-size: 1.8rem;
         font-weight: 800;
         color: var(--accent-primary);
-    }
-
-    .change-plan-btn {
-        padding: 12px 24px;
-        font-size: 1rem;
-        font-weight: 600;
-        background: transparent;
-        color: var(--accent-primary);
-        border: 2px solid var(--accent-primary);
-        border-radius: 12px;
-        cursor: pointer;
-        transition: all 0.2s;
-        font-family: inherit;
-        min-height: 44px;
-        min-width: 44px;
-    }
-
-    .change-plan-btn:hover {
-        background: var(--accent-primary);
-        color: white;
-        transform: translateY(-2px);
-    }
-
-    .change-plan-btn:active {
-        transform: scale(0.98);
     }
 
     .workout {
@@ -314,16 +284,6 @@
     @media (max-width: 640px) {
         .container {
             padding: 15px;
-        }
-
-        .header {
-            flex-direction: column;
-            gap: 15px;
-            align-items: stretch;
-        }
-
-        .change-plan-btn {
-            width: 100%;
         }
     }
 </style>
