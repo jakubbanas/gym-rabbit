@@ -122,7 +122,7 @@
     aria-label="Menu"
     aria-expanded={showMenu}
 >
-    <span class="floating-btn-icon">{showMenu ? "✕" : "⚙️"}</span>
+    <span class="floating-btn-icon">{showMenu ? "✕" : "⌘"}</span>
 </button>
 
 <style>
