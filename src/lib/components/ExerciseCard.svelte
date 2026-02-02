@@ -18,9 +18,11 @@
     }
 
     let { exercise, completed, isSetChecked, onToggleSet }: Props = $props();
+
+    let isFullyCompleted = $derived(completed === exercise.sets);
 </script>
 
-<div class="exercise">
+<div class="exercise" class:completed={isFullyCompleted}>
     <div class="exercise-header">
         <h3 class="exercise-name">{exercise.name}</h3>
     </div>
@@ -77,6 +79,11 @@
         background: var(--exercise-bg);
         border-radius: 12px;
         border-left: 5px solid var(--accent-secondary);
+        transition: border-color 0.3s ease;
+    }
+
+    .exercise.completed {
+        border-left-color: #22c55e;
     }
 
     .exercise:last-child {
