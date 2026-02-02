@@ -44,7 +44,6 @@ You can preview the production build with `npm run preview`.
 ## AI
 
 prompt:
-
 ```
 You'll receive a training plan in pdf format from my personal trainer. 
 Analyze only "Siłowy" part.
@@ -57,12 +56,11 @@ When there is no weight expressed in kg, use RPE as weight (eg. RPE8, RPE5-7 etc
 3x6 = 3 sets and 6 reps
 3x6-8 = 3 sets and 6 to 8 reps
 
-3x 5+5 means the exercise is unilateral, 5 reps for each leg```
-
-schema:
-
+3x 5+5 means the exercise is unilateral, 5 reps for each leg
 ```
 
+schema:
+```
 {
   "type": "object",
   "properties": {
