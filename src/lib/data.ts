@@ -25,7 +25,7 @@ export const workoutPlans: WorkoutPlan[] = [
                         reps: "3",
                         weight: "5kg",
                         rest: 120,
-                        notes: "przerwy do pełnego wypoczynku."
+                        notes: "najlepiej łączone z trzema ostatnimi seriami) - hantle 5kg - MAKSYMALNA INTENCJA."
                     }
                 ]
             },
