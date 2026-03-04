@@ -81,6 +81,20 @@ export const workoutPlans: WorkoutPlan[] = [
                     }
                 ]
             },
+            {
+                block: "E",
+                exercises: [
+                    {
+                        id: "e1",
+                        name: "Maszyna izolowana na dwójkę",
+                        sets: 3,
+                        reps: "6",
+                        weight: "RPE9",
+                        rest: 90,
+                        notes: 'najlepiej siedząca',
+                    },
+                ],
+            },
         ]
     },
     {
