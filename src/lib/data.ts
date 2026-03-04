@@ -2,8 +2,90 @@ import type { WorkoutPlan } from "./types";
 
 export const workoutPlans: WorkoutPlan[] = [
     {
+        id: "plan-paulina-strength",
+        name: "Paulina Siłowy",
+        startDate: "4.03",
+        blocks: [
+            {
+                block: "A",
+                exercises: [
+                    {
+                        id: "a1",
+                        name: "Trap bar deadlift",
+                        sets: 5,
+                        reps: "5",
+                        weight: "?",
+                        rest: 30,
+                        notes: "przerwy do pełnego wypoczynku."
+                    },
+                    {
+                        id: "a2",
+                        name: "High jump",
+                        sets: 3,
+                        reps: "3",
+                        weight: "5kg",
+                        rest: 120,
+                        notes: "przerwy do pełnego wypoczynku."
+                    }
+                ]
+            },
+            {
+                block: "B",
+                exercises: [
+                    {
+                        id: "b1",
+                        name: "Trap bar pendlay row",
+                        sets: 3,
+                        reps: "6",
+                        weight: "25 kg",
+                        rest: 120,
+                        notes: 'sztangę ustaw na stepach',
+                    },
+                ],
+            },
+            {
+                block: "C",
+                exercises: [
+                    {
+                        id: "c1",
+                        name: "Przysiad bułgarski",
+                        sets: 3,
+                        reps: "6+6",
+                        weight: "8 kg",
+                        rest: 90,
+                        notes: 'z pauzami na dole 3x 6+6 - z kettlami 8kg',
+                        isUnilateral: true,
+                    },
+                ],
+            },
+            {
+                block: "D",
+                exercises: [
+                    {
+                        id: "d1",
+                        name: "Copenhaggen plank",
+                        sets: 3,
+                        reps: "20\"",
+                        weight: "-",
+                        rest: 60,
+                        notes: "jak za lekko kładź ciężar na biodro."
+                    },
+                    {
+                        id: "d2",
+                        name: "Face pulls leżąc",
+                        sets: 3,
+                        reps: "6-8",
+                        weight: "3kg",
+                        rest: 120,
+                        notes: "na brzuchu hantlami."
+                    }
+                ]
+            },
+        ]
+    },
+    {
         id: "plan-jakub-5.0-strength",
-        name: "Jakub Banaś 5.0 Siłowy",
+        name: "Kuba 5.0 Siłowy",
         startDate: "16.02",
         blocks: [
             {
