@@ -16,7 +16,7 @@ export const workoutPlans: WorkoutPlan[] = [
                         reps: "5",
                         weight: "?",
                         rest: 30,
-                        notes: "przerwy do pełnego wypoczynku."
+                        notes: "do 5RM, przerwy do pełnego wypoczynku."
                     },
                     {
                         id: "a2",
