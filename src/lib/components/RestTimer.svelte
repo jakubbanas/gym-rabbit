@@ -14,127 +14,107 @@
         const s = secs % 60;
         return `${mins}:${s.toString().padStart(2, "0")}`;
     }
-
-    function handleKeyDown(event: KeyboardEvent) {
-        if (event.key === "Escape") {
-            onStop();
-        }
-    }
-
-    function handleContentKeyDown(event: KeyboardEvent) {
-        // Stop propagation for keyboard events on content
-        event.stopPropagation();
-    }
 </script>
 
 {#if show}
-    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-    <div
-        class="timer-overlay"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Rest timer"
-        onclick={onStop}
-        onkeydown={handleKeyDown}
-        tabindex="-1"
-    >
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-            class="timer-content"
-            onclick={(e) => e.stopPropagation()}
-            onkeydown={handleContentKeyDown}
-        >
-            <div class="timer-display">
-                <div class="timer-text">{formatTime(seconds)}</div>
-                <div class="timer-label">Rest Time</div>
-            </div>
+    <div class="timer-widget" role="timer" aria-label="Rest timer">
+        <div class="timer-header">
+            <span class="timer-label">Rest Time</span>
+            <button class="timer-close" onclick={onStop} aria-label="Skip rest">✕</button>
+        </div>
 
-            <div class="timer-progress">
-                <div
-                    class="timer-progress-bar"
-                    style="width: {initialSeconds > 0
-                        ? (seconds / initialSeconds) * 100
-                        : 0}%"
-                ></div>
-            </div>
+        <div class="timer-text">{formatTime(seconds)}</div>
 
-            <div class="timer-actions">
-                <button
-                    class="timer-btn timer-btn-secondary"
-                    onclick={onAddTime}
-                >
-                    +30s
-                </button>
-                <button class="timer-btn timer-btn-primary" onclick={onStop}>
-                    Skip Rest
-                </button>
-            </div>
+        <div class="timer-progress">
+            <div
+                class="timer-progress-bar"
+                style="width: {initialSeconds > 0 ? (seconds / initialSeconds) * 100 : 0}%"
+            ></div>
+        </div>
+
+        <div class="timer-actions">
+            <button class="timer-btn timer-btn-secondary" onclick={onAddTime}>+30s</button>
+            <button class="timer-btn timer-btn-primary" onclick={onStop}>Skip</button>
         </div>
     </div>
 {/if}
 
 <style>
-    .timer-overlay {
+    .timer-widget {
         position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.95);
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        bottom: 24px;
+        right: 24px;
+        width: 220px;
+        background: rgba(20, 20, 30, 0.92);
+        backdrop-filter: blur(16px);
+        border: 1px solid rgba(102, 126, 234, 0.3);
+        border-radius: 20px;
+        padding: 16px 18px;
         z-index: 1000;
-        backdrop-filter: blur(10px);
-        animation: fadeIn 0.3s ease-out;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(102, 126, 234, 0.1);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        animation: slideIn 0.25s ease-out;
     }
 
-    @keyframes fadeIn {
+    @keyframes slideIn {
         from {
             opacity: 0;
+            transform: translateY(16px) scale(0.95);
         }
         to {
             opacity: 1;
+            transform: translateY(0) scale(1);
         }
     }
 
-    .timer-content {
+    .timer-header {
         display: flex;
-        flex-direction: column;
+        justify-content: space-between;
         align-items: center;
-        gap: 40px;
-        padding: 40px;
-        max-width: 500px;
-        width: 90%;
-    }
-
-    .timer-display {
-        text-align: center;
-    }
-
-    .timer-text {
-        font-size: 6rem;
-        font-weight: 800;
-        color: #ffffff;
-        line-height: 1;
-        margin-bottom: 10px;
-        font-variant-numeric: tabular-nums;
-        text-shadow: 0 0 30px rgba(102, 126, 234, 0.5);
     }
 
     .timer-label {
-        font-size: 1.5rem;
-        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.7rem;
+        color: rgba(255, 255, 255, 0.5);
         font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 2px;
+        letter-spacing: 1.5px;
+    }
+
+    .timer-close {
+        background: none;
+        border: none;
+        color: rgba(255, 255, 255, 0.4);
+        cursor: pointer;
+        font-size: 0.85rem;
+        padding: 2px 4px;
+        border-radius: 6px;
+        transition: color 0.15s, background 0.15s;
+        line-height: 1;
+    }
+
+    .timer-close:hover {
+        color: rgba(255, 255, 255, 0.9);
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .timer-text {
+        font-size: 2.8rem;
+        font-weight: 800;
+        color: #ffffff;
+        line-height: 1;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+        text-shadow: 0 0 20px rgba(102, 126, 234, 0.6);
     }
 
     .timer-progress {
         width: 100%;
-        height: 8px;
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 4px;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 2px;
         overflow: hidden;
     }
 
@@ -142,27 +122,25 @@
         height: 100%;
         background: linear-gradient(90deg, #667eea, #764ba2);
         transition: width 1s linear;
-        border-radius: 4px;
+        border-radius: 2px;
     }
 
     .timer-actions {
         display: flex;
-        gap: 20px;
-        width: 100%;
+        gap: 8px;
     }
 
     .timer-btn {
         flex: 1;
-        padding: 20px 36px;
-        font-size: 1.25rem;
+        padding: 8px 10px;
+        font-size: 0.8rem;
         font-weight: 700;
         border: none;
-        border-radius: 16px;
+        border-radius: 10px;
         cursor: pointer;
-        transition: all 0.2s;
+        transition: all 0.15s;
         text-transform: uppercase;
-        letter-spacing: 1px;
-        min-height: 68px;
+        letter-spacing: 0.5px;
     }
 
     .timer-btn-primary {
@@ -171,22 +149,22 @@
     }
 
     .timer-btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.5);
+        filter: brightness(1.1);
     }
 
     .timer-btn-secondary {
-        background: rgba(255, 255, 255, 0.1);
-        color: white;
-        border: 2px solid rgba(255, 255, 255, 0.3);
+        background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     .timer-btn-secondary:hover {
-        background: rgba(255, 255, 255, 0.2);
-        border-color: rgba(255, 255, 255, 0.5);
+        background: rgba(255, 255, 255, 0.15);
+        border-color: rgba(255, 255, 255, 0.4);
     }
 
     .timer-btn:active {
-        transform: scale(0.98);
+        transform: scale(0.96);
     }
 </style>
