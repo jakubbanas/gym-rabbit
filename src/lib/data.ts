@@ -98,6 +98,102 @@ export const workoutPlans: WorkoutPlan[] = [
         ]
     },
     {
+        id: "plan-paulina-2-strength",
+        name: "Paulina 2.0 Siłowy",
+        startDate: "21.03",
+        blocks: [
+            {
+                block: "A",
+                exercises: [
+                    {
+                        id: "a1",
+                        name: "Trap bar deadlift",
+                        sets: 4,
+                        reps: "3",
+                        weight: "40; 50; 55; 60kg",
+                        rest: 180,
+                        notes: "przerwy do pełnego wypoczynku."
+                    },
+                    {
+                        id: "a2",
+                        name: "High jump",
+                        sets: 3,
+                        reps: "3",
+                        weight: "5kg",
+                        rest: 120,
+                        notes: "30\" po A1 - najlepiej łączone z trzema ostatnimi seriami - hantle 5kg - MAKSYMALNA INTENCJA."
+                    }
+                ]
+            },
+            {
+                block: "B",
+                exercises: [
+                    {
+                        id: "b1",
+                        name: "Trap bar pendlay row",
+                        sets: 4,
+                        reps: "6",
+                        weight: "27.5kg",
+                        rest: 120,
+                        notes: "sztangę ustaw na stepach - Przerwa między seriami 90-120\""
+                    }
+                ]
+            },
+            {
+                block: "C",
+                exercises: [
+                    {
+                        id: "c1",
+                        name: "Przysiad bułgarski",
+                        sets: 3,
+                        reps: "7+7",
+                        weight: "10kg",
+                        rest: 90,
+                        notes: "z pauzami na dole - z hantlami 10kg (Przerwa między nogami 90\")",
+                        isUnilateral: true
+                    }
+                ]
+            },
+            {
+                block: "D",
+                exercises: [
+                    {
+                        id: "d1",
+                        name: "Copenhaggen plank",
+                        sets: 3,
+                        reps: "20\"+20\"",
+                        weight: "4kg",
+                        rest: 60,
+                        notes: "+4kg na biodrze"
+                    },
+                    {
+                        id: "d2",
+                        name: "Face pulls leżąc",
+                        sets: 3,
+                        reps: "8",
+                        weight: "3kg",
+                        rest: 120,
+                        notes: "na brzuchu hantlami - hantle 3kg. (Przerwa po całości do 120\")"
+                    }
+                ]
+            },
+            {
+                block: "E",
+                exercises: [
+                    {
+                        id: "e1",
+                        name: "Maszyna izolowana na dwójkę",
+                        sets: 3,
+                        reps: "5-6",
+                        weight: "35kg",
+                        rest: 90,
+                        notes: "najlepiej siedząca."
+                    }
+                ]
+            }
+        ]
+    },
+    {
         id: "plan-jakub-5.0-strength",
         name: "Kuba 5.0 Siłowy",
         startDate: "16.02",
