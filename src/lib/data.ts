@@ -100,7 +100,7 @@ export const workoutPlans: WorkoutPlan[] = [
     {
         id: "plan-jakub-6.0-strength",
         name: "Kuba 6.0 Siłowy",
-        startDate: "16.03",
+        startDate: "27.03",
         blocks: [
             {
                 block: "A",
@@ -197,9 +197,9 @@ export const workoutPlans: WorkoutPlan[] = [
         ],
     },
     {
-        id: "marcin-1.0-strength",
-        name: "Marcin 1.0 Siłowy",
-        startDate: "19.02",
+        id: "marcin-2.0-strength",
+        name: "Marcin 2.0 Siłowy",
+        startDate: "27.03",
         blocks: [
             {
                 block: "A",
