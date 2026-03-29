@@ -208,8 +208,8 @@
 
     .selected-indicator {
         position: absolute;
-        top: 20px;
-        right: 20px;
+        bottom: -15px;
+        right: -15px;
         width: 48px;
         height: 48px;
         background: var(--accent-primary);
@@ -220,6 +220,8 @@
         font-size: 1.8rem;
         color: white;
         font-weight: 900;
+        z-index: 10;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
     }
 
     .continue-btn {
