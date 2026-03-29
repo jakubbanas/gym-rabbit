@@ -96,17 +96,26 @@
             <h3>Training Blocks</h3>
             
             {#each blocks as block, bIdx}
-                <div class="block-editor">
-                    <div class="block-header">
-                        <h4>Block {block.block}</h4>
-                        <button type="button" class="btn-remove" onclick={() => removeBlock(bIdx)}>Remove Block</button>
-                    </div>
+            <div class="block-editor">
+            <div class="block-header">
+            <h4>Block {block.block}</h4>
+            <button type="button" class="btn-remove" onclick={() => removeBlock(bIdx)}>Remove Block</button>
+            </div>
 
-                    <div class="exercises-list">
-                        {#each block.exercises as exercise, eIdx}
-                            <div class="exercise-editor">
-                                <div class="exercise-row">
-                                    <div class="form-group flex-2">
+            <div class="exercises-list">
+            {#each block.exercises as exercise, eIdx}
+                <div class="exercise-editor">
+                    <div class="exercise-header">
+                        <h5>Exercise {eIdx + 1}</h5>
+                        <button 
+                            type="button" 
+                            class="btn-remove-exercise" 
+                            onclick={() => removeExercise(bIdx, eIdx)}
+                        >
+                            Remove Exercise
+                        </button>
+                    </div>
+                    <div class="exercise-row">                                    <div class="form-group flex-2">
                                         <label>Exercise Name</label>
                                         <input type="text" bind:value={exercise.name} placeholder="e.g., Bench Press" required />
                                     </div>
@@ -133,7 +142,6 @@
                                         <label>Unilateral</label>
                                         <input type="checkbox" bind:checked={exercise.isUnilateral} />
                                     </div>
-                                    <button type="button" class="btn-remove-sm" onclick={() => removeExercise(bIdx, eIdx)}>×</button>
                                 </div>
                                 
                                 <div class="form-group">
@@ -292,6 +300,21 @@
         position: relative;
     }
 
+    .exercise-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        border-bottom: 1px dashed var(--border-color);
+        padding-bottom: 10px;
+    }
+
+    .exercise-header h5 {
+        margin: 0;
+        font-size: 1rem;
+        color: var(--text-secondary);
+    }
+
     .btn-remove {
         background: #ef4444;
         color: white;
@@ -302,19 +325,21 @@
         font-size: 0.8rem;
     }
 
-    .btn-remove-sm {
+    .btn-remove-exercise {
+        background: transparent;
+        color: #ef4444;
+        border: 1px solid #ef4444;
+        padding: 4px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        font-weight: 600;
+        transition: all 0.2s;
+    }
+
+    .btn-remove-exercise:hover {
         background: #ef4444;
         color: white;
-        border: none;
-        width: 30px;
-        height: 30px;
-        border-radius: 50%;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: bold;
-        margin-bottom: 15px;
     }
 
     .btn-add-exercise {

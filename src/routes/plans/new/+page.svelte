@@ -3,7 +3,7 @@
     import type { WorkoutPlan, TrainingBlock, Exercise } from "$lib/types";
 
     let planName = $state("");
-    let startDate = $state(new Date().toLocaleDateString('pl-PL').slice(0, 5));
+    let startDate = $state(new Date().toLocaleDateString("pl-PL").slice(0, 5));
     let blocks = $state<TrainingBlock[]>([]);
 
     function addBlock() {
@@ -18,7 +18,7 @@
     function addExercise(blockIndex: number) {
         const block = blocks[blockIndex];
         const exerciseId = `${block.block.toLowerCase()}${block.exercises.length + 1}`;
-        
+
         const newExercise: Exercise = {
             id: exerciseId,
             name: "",
@@ -27,32 +27,44 @@
             weight: "",
             rest: 60,
             notes: "",
-            isUnilateral: false
+            isUnilateral: false,
         };
 
         const updatedBlocks = [...blocks];
-        updatedBlocks[blockIndex].exercises = [...updatedBlocks[blockIndex].exercises, newExercise];
+        updatedBlocks[blockIndex].exercises = [
+            ...updatedBlocks[blockIndex].exercises,
+            newExercise,
+        ];
         blocks = updatedBlocks;
     }
 
     function removeExercise(blockIndex: number, exerciseIndex: number) {
         const updatedBlocks = [...blocks];
-        updatedBlocks[blockIndex].exercises = updatedBlocks[blockIndex].exercises.filter((_, i) => i !== exerciseIndex);
+        updatedBlocks[blockIndex].exercises = updatedBlocks[
+            blockIndex
+        ].exercises.filter((_, i) => i !== exerciseIndex);
         blocks = updatedBlocks;
     }
 
     function generatePlanId(name: string): string {
-        return name.toLowerCase()
-            .replace(/\s+/g, '-')
-            .replace(/[^a-z0-9-]/g, '') + '-' + Date.now().toString().slice(-4);
+        return (
+            name
+                .toLowerCase()
+                .replace(/\s+/g, "-")
+                .replace(/[^a-z0-9-]/g, "") +
+            "-" +
+            Date.now().toString().slice(-4)
+        );
     }
 
-    let planDataJson = $derived(JSON.stringify({
-        id: generatePlanId(planName),
-        name: planName,
-        startDate: startDate,
-        blocks: blocks
-    } as WorkoutPlan));
+    let planDataJson = $derived(
+        JSON.stringify({
+            id: generatePlanId(planName),
+            name: planName,
+            startDate: startDate,
+            blocks: blocks,
+        } as WorkoutPlan),
+    );
 </script>
 
 <div class="container">
@@ -67,78 +79,127 @@
         <div class="section">
             <div class="form-group">
                 <label for="planName">Plan Name</label>
-                <input 
-                    type="text" 
-                    id="planName" 
-                    bind:value={planName} 
-                    placeholder="e.g., Summer Strength 2026" 
-                    required 
+                <input
+                    type="text"
+                    id="planName"
+                    bind:value={planName}
+                    placeholder="e.g., Summer Strength 2026"
+                    required
                 />
             </div>
             <div class="form-group">
                 <label for="startDate">Start Date (DD.MM)</label>
-                <input 
-                    type="text" 
-                    id="startDate" 
-                    bind:value={startDate} 
-                    placeholder="29.03" 
-                    required 
+                <input
+                    type="text"
+                    id="startDate"
+                    bind:value={startDate}
+                    placeholder="29.03"
+                    required
                 />
             </div>
         </div>
 
         <div class="blocks-container">
             <h3>Training Blocks</h3>
-            
+
             {#each blocks as block, bIdx}
                 <div class="block-editor">
                     <div class="block-header">
                         <h4>Block {block.block}</h4>
-                        <button type="button" class="btn-remove" onclick={() => removeBlock(bIdx)}>Remove Block</button>
+                        <button
+                            type="button"
+                            class="btn-remove"
+                            onclick={() => removeBlock(bIdx)}
+                            >Remove Block</button
+                        >
                     </div>
 
                     <div class="exercises-list">
                         {#each block.exercises as exercise, eIdx}
                             <div class="exercise-editor">
+                                <div class="exercise-header">
+                                    <h5>Exercise {eIdx + 1}</h5>
+                                    <button 
+                                        type="button" 
+                                        class="btn-remove-exercise" 
+                                        onclick={() => removeExercise(bIdx, eIdx)}
+                                    >
+                                        Remove Exercise
+                                    </button>
+                                </div>
                                 <div class="exercise-row">
                                     <div class="form-group flex-2">
                                         <label>Exercise Name</label>
-                                        <input type="text" bind:value={exercise.name} placeholder="e.g., Bench Press" required />
+                                        <input
+                                            type="text"
+                                            bind:value={exercise.name}
+                                            placeholder="e.g., Bench Press"
+                                            required
+                                        />
                                     </div>
                                     <div class="form-group flex-1">
                                         <label>Sets</label>
-                                        <input type="number" bind:value={exercise.sets} min="1" required />
+                                        <input
+                                            type="number"
+                                            bind:value={exercise.sets}
+                                            min="1"
+                                            required
+                                        />
                                     </div>
                                     <div class="form-group flex-1">
                                         <label>Reps</label>
-                                        <input type="text" bind:value={exercise.reps} placeholder="8-10" required />
+                                        <input
+                                            type="text"
+                                            bind:value={exercise.reps}
+                                            placeholder="8-10"
+                                            required
+                                        />
                                     </div>
                                 </div>
 
                                 <div class="exercise-row">
                                     <div class="form-group flex-1">
                                         <label>Weight</label>
-                                        <input type="text" bind:value={exercise.weight} placeholder="40kg" />
+                                        <input
+                                            type="text"
+                                            bind:value={exercise.weight}
+                                            placeholder="40kg"
+                                        />
                                     </div>
                                     <div class="form-group flex-1">
                                         <label>Rest (sec)</label>
-                                        <input type="number" bind:value={exercise.rest} min="0" step="10" />
+                                        <input
+                                            type="number"
+                                            bind:value={exercise.rest}
+                                            min="0"
+                                            step="10"
+                                        />
                                     </div>
                                     <div class="form-group flex-1 centered">
                                         <label>Unilateral</label>
-                                        <input type="checkbox" bind:checked={exercise.isUnilateral} />
+                                        <input
+                                            type="checkbox"
+                                            bind:checked={exercise.isUnilateral}
+                                        />
                                     </div>
-                                    <button type="button" class="btn-remove-sm" onclick={() => removeExercise(bIdx, eIdx)}>×</button>
-                                </div>
-                                
+                                    </div>
+
                                 <div class="form-group">
                                     <label>Notes</label>
-                                    <textarea bind:value={exercise.notes} rows="2" placeholder="Form cues, machine setting, etc."></textarea>
+                                    <textarea
+                                        bind:value={exercise.notes}
+                                        rows="2"
+                                        placeholder="Form cues, machine setting, etc."
+                                    ></textarea>
                                 </div>
                             </div>
                         {/each}
-                        
-                        <button type="button" class="btn-add-exercise" onclick={() => addExercise(bIdx)}>
+
+                        <button
+                            type="button"
+                            class="btn-add-exercise"
+                            onclick={() => addExercise(bIdx)}
+                        >
                             + Add Exercise to Block {block.block}
                         </button>
                     </div>
@@ -151,7 +212,11 @@
         </div>
 
         <div class="form-actions">
-            <button type="submit" class="btn-submit" disabled={!planName || blocks.length === 0}>
+            <button
+                type="submit"
+                class="btn-submit"
+                disabled={!planName || blocks.length === 0}
+            >
                 Save Workout Plan
             </button>
         </div>
@@ -204,8 +269,12 @@
         margin-bottom: 15px;
     }
 
-    .flex-1 { flex: 1; }
-    .flex-2 { flex: 2; }
+    .flex-1 {
+        flex: 1;
+    }
+    .flex-2 {
+        flex: 2;
+    }
 
     label {
         font-weight: 600;
@@ -273,6 +342,21 @@
         position: relative;
     }
 
+    .exercise-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        border-bottom: 1px dashed var(--border-color);
+        padding-bottom: 10px;
+    }
+
+    .exercise-header h5 {
+        margin: 0;
+        font-size: 1rem;
+        color: var(--text-secondary);
+    }
+
     .btn-remove {
         background: #ef4444;
         color: white;
@@ -283,19 +367,21 @@
         font-size: 0.8rem;
     }
 
-    .btn-remove-sm {
+    .btn-remove-exercise {
+        background: transparent;
+        color: #ef4444;
+        border: 1px solid #ef4444;
+        padding: 4px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        font-weight: 600;
+        transition: all 0.2s;
+    }
+
+    .btn-remove-exercise:hover {
         background: #ef4444;
         color: white;
-        border: none;
-        width: 30px;
-        height: 30px;
-        border-radius: 50%;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: bold;
-        margin-bottom: 15px;
     }
 
     .btn-add-exercise {
