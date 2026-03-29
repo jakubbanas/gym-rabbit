@@ -4,9 +4,15 @@
 
     let { data } = $props();
     
-    let planName = $state(data.plan.name);
-    let startDate = $state(data.plan.startDate);
-    let blocks = $state<TrainingBlock[]>(data.plan.blocks);
+    let planName = $state("");
+    let startDate = $state("");
+    let blocks = $state<TrainingBlock[]>([]);
+
+    $effect(() => {
+        planName = data.plan.name;
+        startDate = data.plan.startDate;
+        blocks = data.plan.blocks;
+    });
 
     function addBlock() {
         const nextBlockLabel = String.fromCharCode(65 + blocks.length); // A, B, C...
@@ -104,53 +110,67 @@
 
             <div class="exercises-list">
             {#each block.exercises as exercise, eIdx}
-                <div class="exercise-editor">
-                    <div class="exercise-header">
-                        <h5>Exercise {eIdx + 1}</h5>
-                        <button 
-                            type="button" 
-                            class="btn-remove-exercise" 
-                            onclick={() => removeExercise(bIdx, eIdx)}
-                        >
-                            Remove Exercise
-                        </button>
-                    </div>
-                    <div class="exercise-row">                                    <div class="form-group flex-2">
-                                        <label>Exercise Name</label>
-                                        <input type="text" bind:value={exercise.name} placeholder="e.g., Bench Press" required />
-                                    </div>
-                                    <div class="form-group flex-1">
-                                        <label>Sets</label>
-                                        <input type="number" bind:value={exercise.sets} min="1" required />
-                                    </div>
-                                    <div class="form-group flex-1">
-                                        <label>Reps</label>
-                                        <input type="text" bind:value={exercise.reps} placeholder="8-10" required />
-                                    </div>
-                                </div>
-
-                                <div class="exercise-row">
-                                    <div class="form-group flex-1">
-                                        <label>Weight</label>
-                                        <input type="text" bind:value={exercise.weight} placeholder="40kg" />
-                                    </div>
-                                    <div class="form-group flex-1">
-                                        <label>Rest (sec)</label>
-                                        <input type="number" bind:value={exercise.rest} min="0" step="10" />
-                                    </div>
-                                    <div class="form-group flex-1 centered">
-                                        <label>Unilateral</label>
-                                        <input type="checkbox" bind:checked={exercise.isUnilateral} />
-                                    </div>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label>Notes</label>
-                                    <textarea bind:value={exercise.notes} rows="2" placeholder="Form cues, machine setting, etc."></textarea>
-                                </div>
+            <div class="exercise-editor">
+            <div class="exercise-header">
+                <h5>Exercise {eIdx + 1}</h5>
+                <button 
+                    type="button" 
+                    class="btn-remove-exercise" 
+                    onclick={() => removeExercise(bIdx, eIdx)}
+                >
+                    Remove Exercise
+                </button>
+            </div>
+            <div class="exercise-row">
+                            <div class="form-group flex-2">
+                                <label>
+                                    Exercise Name
+                                    <input type="text" bind:value={exercise.name} placeholder="e.g., Bench Press" required />
+                                </label>
                             </div>
-                        {/each}
-                        
+                            <div class="form-group flex-1">
+                                <label>
+                                    Sets
+                                    <input type="number" bind:value={exercise.sets} min="1" required />
+                                </label>
+                            </div>
+                            <div class="form-group flex-1">
+                                <label>
+                                    Reps
+                                    <input type="text" bind:value={exercise.reps} placeholder="8-10" required />
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="exercise-row">
+                            <div class="form-group flex-1">
+                                <label>
+                                    Weight
+                                    <input type="text" bind:value={exercise.weight} placeholder="40kg" />
+                                </label>
+                            </div>
+                            <div class="form-group flex-1">
+                                <label>
+                                    Rest (sec)
+                                    <input type="number" bind:value={exercise.rest} min="0" step="10" />
+                                </label>
+                            </div>
+                            <div class="form-group flex-1 centered">
+                                <label>
+                                    Unilateral
+                                    <input type="checkbox" bind:checked={exercise.isUnilateral} />
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>
+                                Notes
+                                <textarea bind:value={exercise.notes} rows="2" placeholder="Form cues, machine setting, etc."></textarea>
+                            </label>
+                        </div>
+                    </div>
+                {/each}                        
                         <button type="button" class="btn-add-exercise" onclick={() => addExercise(bIdx)}>
                             + Add Exercise to Block {block.block}
                         </button>
@@ -427,11 +447,6 @@
         .exercise-row {
             flex-direction: column;
             align-items: stretch;
-        }
-        .btn-remove-sm {
-            width: 100%;
-            border-radius: 6px;
-            height: 40px;
         }
     }
 </style>

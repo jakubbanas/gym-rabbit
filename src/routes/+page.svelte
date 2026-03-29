@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { goto } from "$app/navigation";
+    import { goto, invalidateAll } from "$app/navigation";
     import { loadState, setCurrentPlan } from "$lib/storage";
 
     let { data } = $props();
@@ -13,6 +13,14 @@
 
     function handleSelectPlan(planId: string) {
         selectedPlanId = planId;
+    }
+
+    async function handlePurgeCache() {
+        if (confirm("Are you sure you want to purge all local data?")) {
+            localStorage.clear();
+            selectedPlanId = "";
+            await invalidateAll();
+        }
     }
 
     function handleContinue() {
@@ -74,6 +82,12 @@
             Continue to Workout
         </button>
     {/if}
+
+    <div class="footer-actions">
+        <button class="btn-purge" onclick={handlePurgeCache}>
+            Purge Cache & Reload
+        </button>
+    </div>
 </div>
 
 <style>
@@ -252,6 +266,29 @@
 
     .continue-btn:active {
         transform: scale(0.98);
+    }
+
+    .footer-actions {
+        margin-top: 60px;
+        text-align: center;
+        padding-bottom: 40px;
+    }
+
+    .btn-purge {
+        background: transparent;
+        color: var(--text-tertiary);
+        border: 1px solid var(--border-color);
+        padding: 8px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        transition: all 0.2s;
+    }
+
+    .btn-purge:hover {
+        background: rgba(239, 68, 68, 0.1);
+        color: #ef4444;
+        border-color: #ef4444;
     }
 
     @media (max-width: 640px) {
