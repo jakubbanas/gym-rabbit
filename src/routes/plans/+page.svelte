@@ -1,9 +1,9 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { goto } from "$app/navigation";
-    import { workoutPlans } from "$lib/data";
     import { loadState, setCurrentPlan } from "$lib/storage";
 
+    let { data } = $props();
     let selectedPlanId = $state("");
 
     onMount(() => {
@@ -30,7 +30,7 @@
     </div>
 
     <div class="plans-grid">
-        {#each workoutPlans as plan}
+        {#each data.workoutPlans as plan}
             <button
                 class="plan-card"
                 class:selected={selectedPlanId === plan.id}

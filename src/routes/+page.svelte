@@ -1,12 +1,13 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
     import { goto } from "$app/navigation";
-    import { workoutPlans } from "$lib/data";
     import { loadState, updateProgress } from "$lib/storage";
     import type { AppState, WorkoutPlan, Exercise } from "$lib/types";
     import RestTimer from "$lib/components/RestTimer.svelte";
     import ExerciseCard from "$lib/components/ExerciseCard.svelte";
     import FloatingMenu from "$lib/components/FloatingMenu.svelte";
+
+    let { data } = $props();
 
     // @ts-expect-error - svelte-check has issues with $state rune typing
     let state = $state({
@@ -14,7 +15,7 @@
         progress: {} as Record<string, any>,
     });
     let currentPlan = $derived(
-        workoutPlans.find((p) => p.id === state.currentPlanId),
+        data.workoutPlans.find((p: WorkoutPlan) => p.id === state.currentPlanId),
     );
 
     // Rest timer state
