@@ -45,6 +45,6 @@ export const actions: Actions = {
             return fail(500, { message: 'Failed to save plan to database' });
         }
 
-        throw redirect(303, '/plans');
+        throw redirect(303, '/');
     }
 };

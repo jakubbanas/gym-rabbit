@@ -27,7 +27,7 @@
 
     function handleMenuItemClick(itemId: string) {
         if (itemId === "change-plan") {
-            goto("/plans");
+            goto("/");
         } else if (itemId === "pace-calculator") {
             goto("/pace-calculator");
         } else if (itemId === "reset-progress") {
