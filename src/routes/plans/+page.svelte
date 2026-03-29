@@ -27,31 +27,45 @@
     <div class="header">
         <h1>🐰 Choose Your Workout Plan</h1>
         <p class="subtitle">Select a training program to get started</p>
+        <div class="header-actions">
+            <a href="/plans/new" class="btn-new-plan">+ Create New Plan</a>
+        </div>
     </div>
 
     <div class="plans-grid">
         {#each data.workoutPlans as plan}
-            <button
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div
                 class="plan-card"
                 class:selected={selectedPlanId === plan.id}
                 onclick={() => handleSelectPlan(plan.id)}
             >
-                <h2 class="plan-name">{plan.name}</h2>
-                <p class="plan-date">Started {plan.startDate}</p>
-                <div class="plan-stats">
-                    <span>{plan.blocks.length} blocks</span>
-                    <span>•</span>
-                    <span>
-                        {plan.blocks.reduce(
-                            (sum, block) => sum + block.exercises.length,
-                            0,
-                        )} exercises
-                    </span>
+                <div class="card-content">
+                    <h2 class="plan-name">{plan.name}</h2>
+                    <p class="plan-date">Started {plan.startDate}</p>
+                    <div class="plan-stats">
+                        <span>{plan.blocks.length} blocks</span>
+                        <span>•</span>
+                        <span>
+                            {plan.blocks.reduce(
+                                (sum, block) => sum + block.exercises.length,
+                                0,
+                            )} exercises
+                        </span>
+                    </div>
                 </div>
+
+                <div class="card-actions">
+                    <a href="/plans/{plan.id}/edit" class="btn-edit" onclick={(e) => e.stopPropagation()}>
+                        Edit
+                    </a>
+                </div>
+
                 {#if selectedPlanId === plan.id}
                     <div class="selected-indicator">✓</div>
                 {/if}
-            </button>
+            </div>
         {/each}
     </div>
 
@@ -75,6 +89,27 @@
     .header {
         text-align: center;
         margin-bottom: 40px;
+    }
+
+    .header-actions {
+        margin-top: 20px;
+    }
+
+    .btn-new-plan {
+        display: inline-block;
+        padding: 12px 24px;
+        background: var(--card-bg);
+        color: var(--accent-primary);
+        border: 2px solid var(--accent-primary);
+        border-radius: 12px;
+        text-decoration: none;
+        font-weight: 700;
+        transition: all 0.2s;
+    }
+
+    .btn-new-plan:hover {
+        background: var(--accent-primary);
+        color: white;
     }
 
     h1 {
@@ -108,6 +143,34 @@
         text-align: left;
         position: relative;
         font-family: inherit;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+    }
+
+    .card-content {
+        flex: 1;
+    }
+
+    .card-actions {
+        margin-left: 10px;
+    }
+
+    .btn-edit {
+        padding: 6px 12px;
+        background: var(--exercise-bg);
+        color: var(--accent-primary);
+        border: 1px solid var(--accent-primary);
+        border-radius: 8px;
+        text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 600;
+        transition: all 0.2s;
+    }
+
+    .btn-edit:hover {
+        background: var(--accent-primary);
+        color: white;
     }
 
     .plan-card:hover {

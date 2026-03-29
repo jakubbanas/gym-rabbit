@@ -113,4 +113,111 @@ export function seedDatabase(workoutPlans: WorkoutPlan[]) {
     transaction(workoutPlans);
 }
 
+export function createWorkoutPlan(plan: WorkoutPlan) {
+    const insertPlan = db.prepare('INSERT INTO plans (id, name, startDate) VALUES (?, ?, ?)');
+    const insertBlock = db.prepare('INSERT INTO blocks (plan_id, name, sort_order) VALUES (?, ?, ?)');
+    const insertExercise = db.prepare(`
+        INSERT INTO exercises (id, block_id, name, sets, reps, weight, rest, notes, is_unilateral, sort_order)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const transaction = db.transaction((plan: WorkoutPlan) => {
+        insertPlan.run(plan.id, plan.name, plan.startDate);
+        
+        plan.blocks.forEach((block, blockIdx) => {
+            const blockResult = insertBlock.run(plan.id, block.block, blockIdx);
+            const blockId = blockResult.lastInsertRowid;
+            
+            block.exercises.forEach((ex, exIdx) => {
+                insertExercise.run(
+                    ex.id,
+                    blockId,
+                    ex.name,
+                    ex.sets,
+                    ex.reps,
+                    ex.weight || null,
+                    ex.rest || null,
+                    ex.notes || null,
+                    ex.isUnilateral ? 1 : 0,
+                    exIdx
+                );
+            });
+        });
+    });
+
+    transaction(plan);
+}
+
+export function updateWorkoutPlan(plan: WorkoutPlan) {
+    const insertPlan = db.prepare('INSERT INTO plans (id, name, startDate) VALUES (?, ?, ?)');
+    const insertBlock = db.prepare('INSERT INTO blocks (plan_id, name, sort_order) VALUES (?, ?, ?)');
+    const insertExercise = db.prepare(`
+        INSERT INTO exercises (id, block_id, name, sets, reps, weight, rest, notes, is_unilateral, sort_order)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const transaction = db.transaction((plan: WorkoutPlan) => {
+        // Delete existing blocks and exercises (via cascade from plans delete if we delete plan, 
+        // but we want to keep the same plan ID, so we delete from blocks)
+        db.prepare('DELETE FROM blocks WHERE plan_id = ?').run(plan.id);
+        
+        // Update plan metadata
+        db.prepare('UPDATE plans SET name = ?, startDate = ? WHERE id = ?').run(plan.name, plan.startDate, plan.id);
+        
+        plan.blocks.forEach((block, blockIdx) => {
+            const blockResult = insertBlock.run(plan.id, block.block, blockIdx);
+            const blockId = blockResult.lastInsertRowid;
+            
+            block.exercises.forEach((ex, exIdx) => {
+                insertExercise.run(
+                    ex.id,
+                    blockId,
+                    ex.name,
+                    ex.sets,
+                    ex.reps,
+                    ex.weight || null,
+                    ex.rest || null,
+                    ex.notes || null,
+                    ex.isUnilateral ? 1 : 0,
+                    exIdx
+                );
+            });
+        });
+    });
+
+    transaction(plan);
+}
+
+export function getWorkoutPlan(id: string): WorkoutPlan | undefined {
+    const plan = db.prepare('SELECT * FROM plans WHERE id = ?').get(id) as any;
+    if (!plan) return undefined;
+
+    const blocks = db.prepare('SELECT * FROM blocks WHERE plan_id = ? ORDER BY sort_order').all(plan.id) as any[];
+    
+    const mappedBlocks: TrainingBlock[] = blocks.map(block => {
+        const exercises = db.prepare('SELECT * FROM exercises WHERE block_id = ? ORDER BY sort_order').all(block.id) as any[];
+        
+        return {
+            block: block.name,
+            exercises: exercises.map(ex => ({
+                id: ex.id,
+                name: ex.name,
+                sets: ex.sets,
+                reps: ex.reps,
+                weight: ex.weight || undefined,
+                rest: ex.rest || undefined,
+                notes: ex.notes || undefined,
+                isUnilateral: !!ex.is_unilateral
+            }))
+        };
+    });
+
+    return {
+        id: plan.id,
+        name: plan.name,
+        startDate: plan.startDate,
+        blocks: mappedBlocks
+    };
+}
+
 export default db;
