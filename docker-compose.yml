@@ -1,0 +1,13 @@
+services:
+  gym-rabbit:
+    build: .
+    container_name: gym-rabbit
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # Bind mount for the SQLite database to ensure persistence
+      - ./database.sqlite:/app/database.sqlite
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
