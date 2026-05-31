@@ -1,0 +1,14 @@
+services:
+  gym-rabbit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gym-rabbit
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+    volumes:
+      # Bind mount the local ignored data directory for SQLite persistence
+      - ./data:/app/data
