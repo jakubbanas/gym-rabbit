@@ -59,7 +59,7 @@ export default function WorkoutView({
 
   return (
     <div
-      className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col font-sans select-none"
+      className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col font-sans select-none max-w-md mx-auto w-full"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >

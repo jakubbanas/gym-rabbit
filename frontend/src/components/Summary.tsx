@@ -42,7 +42,7 @@ export default function Summary({ plan, progress, onFinish }: SummaryProps) {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center p-6 text-center">
+    <div className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto w-full">
       <div className="w-24 h-24 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center mb-6">
         <Check size={48} strokeWidth={3} />
       </div>
