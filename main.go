@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/jakubbanas/gym-rabbit/internal/api"
 	"github.com/jakubbanas/gym-rabbit/internal/db"
@@ -115,8 +116,8 @@ func main() {
 		})
 	}
 
-	// Add CORS middleware for development
-	corsHandler := corsMiddleware(mux)
+	// Add middleware chain: Logging -> CORS
+	handlerWithMiddleware := loggingMiddleware(corsMiddleware(mux))
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -124,9 +125,40 @@ func main() {
 	}
 
 	log.Printf("🐰 Gym Rabbit server starting on http://localhost:%s", port)
-	if err := http.ListenAndServe(":"+port, corsHandler); err != nil {
+	if err := http.ListenAndServe(":"+port, handlerWithMiddleware); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
+}
+
+type statusResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (w *statusResponseWriter) WriteHeader(code int) {
+	w.statusCode = code
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		wrapped := &statusResponseWriter{
+			ResponseWriter: w,
+			statusCode:     http.StatusOK,
+		}
+
+		next.ServeHTTP(wrapped, r)
+
+		clientIP := r.Header.Get("X-Forwarded-For")
+		if clientIP == "" {
+			clientIP = r.RemoteAddr
+		} else if idx := strings.Index(clientIP, ","); idx != -1 {
+			clientIP = strings.TrimSpace(clientIP[:idx])
+		}
+
+		log.Printf("%s %s %d %s %s", r.Method, r.URL.Path, wrapped.statusCode, time.Since(start), clientIP)
+	})
 }
 
 func corsMiddleware(next http.Handler) http.Handler {
