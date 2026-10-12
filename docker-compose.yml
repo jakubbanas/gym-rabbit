@@ -9,6 +9,8 @@ services:
       - "8080:8080"
     environment:
       - PORT=8080
+      # Bearer token required on /mcp; leave empty to disable auth
+      - MCP_TOKEN=${MCP_TOKEN:-}
     volumes:
       # Bind mount the local ignored data directory for SQLite persistence
       - ./data:/app/data

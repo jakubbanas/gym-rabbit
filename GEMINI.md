@@ -61,6 +61,22 @@ Block [A-Z]
 
 ---
 
+## 🤖 MCP Server (AI Assistant Integration)
+
+The Go backend exposes a [Model Context Protocol](https://modelcontextprotocol.io) server at **`/mcp`** (Streamable HTTP transport, via the official `github.com/modelcontextprotocol/go-sdk`). It lets AI assistants such as Claude read and write workout plans directly.
+
+* **Tools:** `list_workouts`, `get_workout` (raw text + parsed structure), `validate_plan`, `create_workout`, `update_workout`, `delete_workout`.
+* **Resource:** `gymrabbit://format` — the Magic Paste spec with an example, so the model writes valid plans.
+* **Validation:** `internal/plan` is a Go port of `frontend/src/lib/parser.ts`. MCP writes are rejected if the text would not parse in the app. **Keep the two parsers in sync.**
+* **Auth:** Set `MCP_TOKEN` to require `Authorization: Bearer <token>` on `/mcp`. If unset, the endpoint is open (like the REST API) — always set it when the server is reachable from outside your machine.
+
+Connect from Claude Code:
+```bash
+claude mcp add --transport http gym-rabbit http://localhost:8080/mcp --header "Authorization: Bearer $MCP_TOKEN"
+```
+
+---
+
 ## 🐳 Containerization & Deployment
 
 The application is fully containerized and compatible with Docker and Podman.

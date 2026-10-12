@@ -2,10 +2,8 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/jakubbanas/gym-rabbit/internal/db"
 )
@@ -48,11 +46,6 @@ func extractID(r *http.Request) string {
 	return ""
 }
 
-// generateID creates a simple unique ID based on timestamp.
-func generateID() string {
-	return fmt.Sprintf("w-%d", time.Now().UnixNano())
-}
-
 // ListWorkouts handles GET /api/workouts
 func (h *Handler) ListWorkouts(w http.ResponseWriter, r *http.Request) {
 	workouts, err := h.DB.ListWorkouts()
@@ -77,7 +70,7 @@ func (h *Handler) CreateWorkout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	workout := &db.Workout{
-		ID:    generateID(),
+		ID:    db.NewID(),
 		Title: req.Title,
 		Text:  req.Text,
 	}

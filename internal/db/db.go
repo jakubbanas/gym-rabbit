@@ -61,6 +61,11 @@ func migrate(conn *sql.DB) error {
 	return err
 }
 
+// NewID creates a simple unique workout ID based on timestamp.
+func NewID() string {
+	return fmt.Sprintf("w-%d", time.Now().UnixNano())
+}
+
 func now() string {
 	return time.Now().UTC().Format(time.RFC3339)
 }

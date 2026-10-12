@@ -27,6 +27,8 @@ export interface WorkoutPlan {
  *   Block [A-Z]
  *   [ID]. [Name] | [Sets]x[Reps] | [Weight] | [Rest]
  *   - [cue line]
+ *
+ * Mirrored server-side in internal/plan/parser.go (used to validate MCP writes) — keep in sync.
  */
 export function parseWorkout(text: string): WorkoutPlan {
   const lines = text.split('\n').map((l) => l.trim());

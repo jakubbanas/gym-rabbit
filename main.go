@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/subtle"
 	"fmt"
 	"io/fs"
 	"log"
@@ -12,6 +13,8 @@ import (
 
 	"github.com/jakubbanas/gym-rabbit/internal/api"
 	"github.com/jakubbanas/gym-rabbit/internal/db"
+	"github.com/jakubbanas/gym-rabbit/internal/mcpserver"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func main() {
@@ -34,7 +37,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	// API routes
-	mux.HandleFunc("/api/workouts/", func(w http.ResponseWriter, r *http.Request) {
+	workoutsRoute := func(w http.ResponseWriter, r *http.Request) {
 		// Check if this is /api/workouts or /api/workouts/{id}
 		trimmed := strings.TrimPrefix(r.URL.Path, "/api/workouts")
 		trimmed = strings.TrimPrefix(trimmed, "/")
@@ -79,7 +82,15 @@ func main() {
 		}
 
 		http.NotFound(w, r)
-	})
+	}
+	// Register both forms so /api/workouts is served directly instead of 307-redirected
+	mux.HandleFunc("/api/workouts", workoutsRoute)
+	mux.HandleFunc("/api/workouts/", workoutsRoute)
+
+	// MCP endpoint (Streamable HTTP) for AI assistants
+	mcpServer := mcpserver.New(database)
+	mcpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return mcpServer }, nil)
+	mux.Handle("/mcp", bearerAuth(os.Getenv("MCP_TOKEN"), mcpHandler))
 
 	// Serve React SPA from frontend/dist if it exists
 	distDir := "frontend/dist"
@@ -140,6 +151,11 @@ func (w *statusResponseWriter) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 
+// Unwrap lets http.ResponseController reach the underlying writer (needed for MCP streaming flushes).
+func (w *statusResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -172,6 +188,21 @@ func corsMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		next.ServeHTTP(w, r)
+	})
+}
+
+// bearerAuth requires "Authorization: Bearer <token>" when token is non-empty.
+func bearerAuth(token string, next http.Handler) http.Handler {
+	if token == "" {
+		return next
+	}
+	expected := []byte("Bearer " + token)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), expected) != 1 {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
 }
