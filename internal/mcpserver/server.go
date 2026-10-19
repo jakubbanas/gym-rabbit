@@ -18,7 +18,8 @@ import (
 
 // strengthHelp is appended to tool descriptions that take strength blocks.
 const strengthHelp = `A strength workout is a list of blocks. A block is a group of exercises done together
-(superset or circuit); for straight sets use one exercise per block. The app labels exercises A1, A2, B1, …
+(superset or circuit); for straight sets use one exercise per block. The app labels exercises with the block
+name's trailing letter ("Blok C" -> C1, C2), or by position (A1, B1, …) if the name doesn't end in one.
 Exercise fields: name, sets, reps (string: "8", "8-10", "AMRAP", "45s"), rest_seconds (0 = go straight to the next
 exercise in the block), optional per_side (reps are per side), weight_kg (omit for bodyweight), load_note, cues.
 Example blocks:

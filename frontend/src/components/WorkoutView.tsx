@@ -110,7 +110,7 @@ export default function WorkoutView({
               <div className="flex justify-between items-start mb-4">
                 <div className="pr-4">
                   <h3 className="text-xl font-bold leading-tight mb-1">
-                    <span className="text-neutral-500 mr-2">{exerciseLabel(currentBlockIdx, exIdx)}.</span>
+                    <span className="text-neutral-500 mr-2">{exerciseLabel(block, currentBlockIdx, exIdx)}.</span>
                     {ex.name}
                   </h3>
                   <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-sm font-medium text-neutral-400">

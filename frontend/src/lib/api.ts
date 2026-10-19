@@ -35,9 +35,14 @@ export interface SavedWorkout {
   updated_at: string;
 }
 
-/** Exercise label shown in the app: A1, A2, B1, … */
-export function exerciseLabel(blockIdx: number, exIdx: number): string {
-  return `${String.fromCharCode(65 + blockIdx)}${exIdx + 1}`;
+/**
+ * Exercise label shown in the app. Uses the block name's trailing letter, so
+ * "Blok C" gives C1, C2 (matching the coach's plan even with gaps or a warm-up
+ * block first); otherwise the block's position: A1, A2, B1, …
+ */
+export function exerciseLabel(block: Block, blockIdx: number, exIdx: number): string {
+  const letter = block.name.match(/(?:^|\s)([A-Za-z])$/)?.[1].toUpperCase() ?? String.fromCharCode(65 + blockIdx);
+  return `${letter}${exIdx + 1}`;
 }
 
 /** Human-readable load: "100 kg · per dumbbell", "Bodyweight". */

@@ -62,7 +62,7 @@ A strength workout is structured JSON, defined in `internal/plan` (Go, with vali
 }
 ```
 
-* **Blocks** group exercises done together (superset/circuit); straight sets are one exercise per block. Unnamed blocks become `Block A`, `Block B`, …, and the app labels exercises `A1`, `A2`, `B1`.
+* **Blocks** group exercises done together (superset/circuit); straight sets are one exercise per block. Unnamed blocks become `Block A`, `Block B`, …. Exercise labels take the block name's trailing letter (`Blok C` → `C1`, `C2`), so they match the coach's plan even with a warm-up block first or gaps in lettering; without one they follow the block's position.
 * **`per_side`** splits the giant set logging button into **[ LEFT ]** and **[ RIGHT ]** halves.
 * **`reps`** is a string (`"8"`, `"8-10"`, `"AMRAP"`, `"45s"`); the volume calculation uses its first number.
 * **`weight_kg`** is a number (omit for bodyweight); **`load_note`** is free text shown next to it.
