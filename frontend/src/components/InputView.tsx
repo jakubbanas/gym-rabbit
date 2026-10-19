@@ -36,7 +36,8 @@ export default function InputView({ initialText, onBack, onStart }: InputViewPro
       </div>
 
       <p className="text-neutral-400 mb-4 text-sm">
-        Review or paste your workout plan using the standard magic-paste format.
+        Paste a plan in the magic-paste format to run a one-off session. It won&apos;t be saved: saved
+        plans are managed through Claude.
       </p>
 
       <textarea

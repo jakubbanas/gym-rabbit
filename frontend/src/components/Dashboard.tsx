@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Dumbbell, Plus, Pencil, Trash2, CalendarDays } from 'lucide-react';
-import { fetchWorkouts, deleteWorkout, type SavedWorkout } from '../lib/api';
+import { Dumbbell, Plus, CalendarDays } from 'lucide-react';
+import { fetchWorkouts, type SavedWorkout } from '../lib/api';
 
 interface DashboardProps {
   onStartWorkout: (text: string, workoutId?: string) => void;
-  onEditWorkout: (text: string, workoutId?: string) => void;
-  onNewWorkout: () => void;
+  onQuickSession: () => void;
 }
 
-export default function Dashboard({ onStartWorkout, onEditWorkout, onNewWorkout }: DashboardProps) {
+export default function Dashboard({ onStartWorkout, onQuickSession }: DashboardProps) {
   const [workouts, setWorkouts] = useState<SavedWorkout[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -26,17 +25,6 @@ export default function Dashboard({ onStartWorkout, onEditWorkout, onNewWorkout 
   useEffect(() => {
     loadWorkouts();
   }, []);
-
-  const handleDelete = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    if (!confirm('Delete this workout?')) return;
-    try {
-      await deleteWorkout(id);
-      setWorkouts((prev) => prev.filter((w) => w.id !== id));
-    } catch (err) {
-      console.error('Failed to delete workout:', err);
-    }
-  };
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return 'Never';
@@ -71,14 +59,16 @@ export default function Dashboard({ onStartWorkout, onEditWorkout, onNewWorkout 
           <div className="text-neutral-500 text-center py-12">
             <p className="text-4xl mb-3">🐰</p>
             <p>No workouts saved yet.</p>
-            <p className="text-sm">Paste your first routine below!</p>
+            <p className="text-sm">Ask Claude to add your plan, or start a quick session below.</p>
           </div>
         ) : (
           workouts.map((workout) => (
-            <div
+            <button
+              type="button"
               key={workout.id}
               onClick={() => onStartWorkout(workout.text, workout.id)}
-              className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-4 text-left active:bg-neutral-800 transition-colors flex items-center justify-between group cursor-pointer"
+              aria-label={`Start ${workout.title}`}
+              className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-4 text-left active:bg-neutral-800 transition-colors flex items-center justify-between cursor-pointer"
             >
               <div className="min-w-0 flex-1">
                 <h3 className="font-bold text-white mb-1 text-lg truncate">{workout.title}</h3>
@@ -93,33 +83,16 @@ export default function Dashboard({ onStartWorkout, onEditWorkout, onNewWorkout 
                   <span>Last: {formatDate(workout.lastPerformed)}</span>
                 </p>
               </div>
-              <div className="flex items-center gap-1 ml-3 shrink-0">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEditWorkout(workout.text, workout.id);
-                  }}
-                  className="text-neutral-400 bg-neutral-800 active:bg-neutral-700 active:text-white p-3 rounded-full transition-colors"
-                >
-                  <Pencil size={18} />
-                </button>
-                <button
-                  onClick={(e) => handleDelete(e, workout.id)}
-                  className="text-neutral-500 bg-neutral-800 active:bg-red-900 active:text-red-400 p-3 rounded-full transition-colors"
-                >
-                  <Trash2 size={18} />
-                </button>
-              </div>
-            </div>
+            </button>
           ))
         )}
       </div>
 
       <button
-        onClick={onNewWorkout}
+        onClick={onQuickSession}
         className="w-full bg-neutral-900 border-2 border-neutral-800 border-dashed text-neutral-300 font-bold text-lg py-5 rounded-2xl active:bg-neutral-800 transition-colors flex items-center justify-center gap-2"
       >
-        <Plus size={20} /> Paste New Routine
+        <Plus size={20} /> Quick Session
       </button>
     </div>
   );

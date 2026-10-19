@@ -35,7 +35,7 @@ Gym Rabbit is configured as a lightweight monorepo containing a React SPA fronte
 * **Core:** React 19, TypeScript, and Vite.
 * **Styling:** Utility-first TailwindCSS for rapid, fluid layout adjustments.
 * **Icons:** Modern, clean SVG icons powered by `lucide-react`.
-* **State & Sync:** Offline-first architecture. It instantly persists workout logs locally to browser `localStorage` and syncs/backs up routine blueprints to the Go SQLite server.
+* **State & Sync:** Offline-first architecture. It instantly persists workout logs locally to browser `localStorage` and reads routine blueprints from the Go SQLite server (blueprints are written through MCP, see below).
 * **Device APIs:** Uses the native Web Haptic API (`navigator.vibrate`) to provide direct tactile confirmation when clicking physical UI targets.
 
 ---
@@ -70,7 +70,8 @@ The Go backend exposes a [Model Context Protocol](https://modelcontextprotocol.i
 * **FinalSurge:** set `FINALSURGE_EMAIL` and `FINALSURGE_PASSWORD` to enable runs and the `finalsurge_*` tools (`list_workouts`, `create_run_workout`, `set_workout_structure`, `get_workout_structure`, `delete_workout`). `internal/finalsurge` is copied from `../finalsurge-mcp` and talks to FinalSurge's **unofficial, reverse-engineered** API; see that repo's CLAUDE.md for its gotchas (never call `/api/logout`, keep builder output matching the captured payloads).
 * **Resource:** `gymrabbit://format` — the Magic Paste spec with an example, so the model writes valid plans.
 * **Validation:** `internal/plan` is a Go port of `frontend/src/lib/parser.ts`. MCP writes are rejected if the text would not parse in the app. **Keep the two parsers in sync.**
-* **Auth:** Set `MCP_TOKEN` to require `Authorization: Bearer <token>` on `/mcp`. If unset, the endpoint is open (like the REST API) — always set it when the server is reachable from outside your machine.
+* **Access model:** The REST API is public and **read-only** (`GET /api/workouts`), with one exception: `POST /api/workouts/{id}/performed`, so the gym UI can record finished sessions. Creating, editing and deleting plans happens **only through MCP**; REST writes return 405. The web UI only runs saved plans or one-off pasted "Quick Sessions" that are never saved.
+* **Auth:** `/mcp` requires `Authorization: Bearer $MCP_TOKEN` (constant-time compare). If `MCP_TOKEN` is unset, `/mcp` is disabled (503), so the write path is never exposed without a token. Serve it over HTTPS only. For a claude.ai custom connector, configure the same header on the connector.
 
 Connect from Claude Code:
 ```bash

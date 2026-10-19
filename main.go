@@ -37,52 +37,34 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	// API routes
+	// API routes. The REST API is public and read-only: plans are created,
+	// edited and deleted only through the token-protected MCP endpoint. The one
+	// exception is /performed, so the gym UI can still record finished sessions.
 	workoutsRoute := func(w http.ResponseWriter, r *http.Request) {
-		// Check if this is /api/workouts or /api/workouts/{id}
-		trimmed := strings.TrimPrefix(r.URL.Path, "/api/workouts")
-		trimmed = strings.TrimPrefix(trimmed, "/")
-		trimmed = strings.TrimSuffix(trimmed, "/")
+		trimmed := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/workouts"), "/")
+		parts := strings.Split(trimmed, "/")
 
-		if trimmed == "" {
+		switch {
+		case trimmed == "":
 			// /api/workouts
-			switch r.Method {
-			case http.MethodGet:
-				handler.ListWorkouts(w, r)
-			case http.MethodPost:
-				handler.CreateWorkout(w, r)
-			default:
-				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			}
-			return
-		}
-
-		// Has an ID segment
-		parts := strings.Split(strings.TrimPrefix(trimmed, "/"), "/")
-		if len(parts) == 1 {
-			// /api/workouts/{id}
-			switch r.Method {
-			case http.MethodPut:
-				handler.UpdateWorkout(w, r)
-			case http.MethodDelete:
-				handler.DeleteWorkout(w, r)
-			default:
-				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			}
-			return
-		}
-
-		if len(parts) == 2 && parts[1] == "performed" {
-			// /api/workouts/{id}/performed
-			if r.Method == http.MethodPost {
-				handler.TouchLastPerformed(w, r)
+			if r.Method != http.MethodGet {
+				readOnly(w)
 				return
 			}
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
+			handler.ListWorkouts(w, r)
+		case len(parts) == 1:
+			// /api/workouts/{id}
+			readOnly(w)
+		case len(parts) == 2 && parts[1] == "performed":
+			// /api/workouts/{id}/performed
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			handler.TouchLastPerformed(w, r)
+		default:
+			http.NotFound(w, r)
 		}
-
-		http.NotFound(w, r)
 	}
 	// Register both forms so /api/workouts is served directly instead of 307-redirected
 	mux.HandleFunc("/api/workouts", workoutsRoute)
@@ -100,7 +82,15 @@ func main() {
 	}
 	mcpServer := mcpserver.New(database, fs)
 	mcpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return mcpServer }, nil)
-	mux.Handle("/mcp", bearerAuth(os.Getenv("MCP_TOKEN"), mcpHandler))
+	if token := os.Getenv("MCP_TOKEN"); token != "" {
+		mux.Handle("/mcp", bearerAuth(token, mcpHandler))
+	} else {
+		// MCP can write plans, so it is never served without a token.
+		log.Printf("MCP_TOKEN is not set: /mcp is disabled")
+		mux.HandleFunc("/mcp", func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "MCP is disabled: set MCP_TOKEN on the server", http.StatusServiceUnavailable)
+		})
+	}
 
 	// Serve React SPA from frontend/dist if it exists
 	distDir := "frontend/dist"
@@ -190,7 +180,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
 		if r.Method == http.MethodOptions {
@@ -202,11 +192,16 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// bearerAuth requires "Authorization: Bearer <token>" when token is non-empty.
+// readOnly rejects REST writes, which are only allowed through MCP.
+func readOnly(w http.ResponseWriter) {
+	w.Header().Set("Allow", "GET")
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusMethodNotAllowed)
+	fmt.Fprintln(w, `{"error":"the REST API is read-only; create, edit and delete plans through MCP"}`)
+}
+
+// bearerAuth requires "Authorization: Bearer <token>".
 func bearerAuth(token string, next http.Handler) http.Handler {
-	if token == "" {
-		return next
-	}
 	expected := []byte("Bearer " + token)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), expected) != 1 {

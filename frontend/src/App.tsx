@@ -6,56 +6,31 @@ import RestTimer from './components/RestTimer';
 import Summary from './components/Summary';
 import ToolsDrawer from './components/ToolsDrawer';
 import { parseWorkout, type WorkoutPlan } from './lib/parser';
-import { createWorkout, updateWorkout, touchLastPerformed } from './lib/api';
+import { touchLastPerformed } from './lib/api';
 
 type AppScreen = 'dashboard' | 'input' | 'workout' | 'rest' | 'summary';
 
 export default function App() {
   const [screen, setScreen] = useState<AppScreen>('dashboard');
-  const [planText, setPlanText] = useState('');
-  const [editingWorkoutId, setEditingWorkoutId] = useState<string | undefined>();
   const [workoutPlan, setWorkoutPlan] = useState<WorkoutPlan | null>(null);
   const [progress, setProgress] = useState<WorkoutProgress>([]);
   const [currentBlockIdx, setCurrentBlockIdx] = useState(0);
   const [restTime, setRestTime] = useState(0);
 
-  // Extract plan name from text for saving
-  const extractTitle = (text: string): string => {
-    const match = text.match(/Plan Name:\s*(.+)/);
-    return match ? match[1].trim() : 'Untitled Workout';
-  };
+  // Start a session. Saved plans are only marked as performed; pasted plans run
+  // as one-off sessions, since plans are saved through MCP, not the web UI.
+  // Throws on parse errors so InputView can show them.
+  const startWorkout = (text: string, workoutId?: string) => {
+    const parsed = parseWorkout(text);
 
-  // Save or update workout to backend, then start
-  const startWorkoutFromText = async (text: string, workoutId?: string) => {
-    try {
-      const parsed = parseWorkout(text);
-      const initialProgress = initProgress(parsed);
-
-      // Save/update the workout
-      const title = extractTitle(text);
-      try {
-        if (workoutId) {
-          await updateWorkout(workoutId, title, text);
-        } else {
-          const saved = await createWorkout(title, text);
-          workoutId = saved.id;
-        }
-      } catch (err) {
-        console.error('Failed to save workout, continuing anyway:', err);
-      }
-
-      // Mark as performed
-      if (workoutId) {
-        touchLastPerformed(workoutId).catch(() => {});
-      }
-
-      setWorkoutPlan(parsed);
-      setProgress(initialProgress);
-      setCurrentBlockIdx(0);
-      setScreen('workout');
-    } catch (err: any) {
-      throw err; // Let InputView handle the error display
+    if (workoutId) {
+      touchLastPerformed(workoutId).catch(() => {});
     }
+
+    setWorkoutPlan(parsed);
+    setProgress(initProgress(parsed));
+    setCurrentBlockIdx(0);
+    setScreen('workout');
   };
 
   const handleLogSet = useCallback(
@@ -97,8 +72,6 @@ export default function App() {
     setScreen('dashboard');
     setWorkoutPlan(null);
     setProgress([]);
-    setPlanText('');
-    setEditingWorkoutId(undefined);
   }, []);
 
   return (
@@ -106,31 +79,18 @@ export default function App() {
       {screen === 'dashboard' && (
         <Dashboard
           onStartWorkout={(text, workoutId) => {
-            startWorkoutFromText(text, workoutId).catch((err) => {
+            try {
+              startWorkout(text, workoutId);
+            } catch (err) {
               console.error('Failed to start workout:', err);
-            });
+            }
           }}
-          onEditWorkout={(text, workoutId) => {
-            setPlanText(text);
-            setEditingWorkoutId(workoutId);
-            setScreen('input');
-          }}
-          onNewWorkout={() => {
-            setPlanText('');
-            setEditingWorkoutId(undefined);
-            setScreen('input');
-          }}
+          onQuickSession={() => setScreen('input')}
         />
       )}
 
       {screen === 'input' && (
-        <InputView
-          initialText={planText}
-          onBack={handleReturnToDashboard}
-          onStart={(text) => {
-            startWorkoutFromText(text, editingWorkoutId).catch(() => {});
-          }}
-        />
+        <InputView initialText="" onBack={handleReturnToDashboard} onStart={(text) => startWorkout(text)} />
       )}
 
       {screen === 'workout' && workoutPlan && (
