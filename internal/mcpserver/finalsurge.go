@@ -10,8 +10,7 @@ import (
 	"github.com/jakubbanas/gym-rabbit/internal/finalsurge"
 )
 
-// Ported from ../finalsurge-mcp/main.go. Tools are prefixed with finalsurge_
-// so they don't clash with the Gym Rabbit workout tools.
+// Run tools, ported from ../finalsurge-mcp/main.go.
 
 const structureHelp = `Structure is a list of blocks. A block is either a single step or a repeat.
 Step fields: intensity (warmup|active|rest|cooldown), exactly one of time ("m:ss"/"h:mm:ss") / distance_km / lap_button,
@@ -21,22 +20,8 @@ Example (12x400m): [{"intensity":"warmup","time":"10:00","pace_fast":"5:40","pac
 {"repeats":12,"steps":[{"distance_km":0.4,"pace_fast":"4:30","pace_slow":"4:40"},{"intensity":"rest","time":"1:30"}]},
 {"intensity":"cooldown","time":"10:00"}]`
 
-type fsListIn struct {
-	StartDate string `json:"start_date" jsonschema:"first day, YYYY-MM-DD"`
-	EndDate   string `json:"end_date" jsonschema:"last day (inclusive), YYYY-MM-DD"`
-}
-
-type runIn struct {
-	Date            string             `json:"date" jsonschema:"workout date, YYYY-MM-DD"`
-	Name            string             `json:"name" jsonschema:"workout name (also shown on the watch)"`
-	Description     string             `json:"description,omitempty" jsonschema:"free-text description, e.g. the coach's original notes"`
-	PlannedMinutes  int                `json:"planned_minutes,omitempty" jsonschema:"planned duration in minutes; if omitted and structure is given, it is estimated from the structure"`
-	PlannedDistance float64            `json:"planned_distance_km,omitempty" jsonschema:"planned distance in km"`
-	Structure       []finalsurge.Block `json:"structure,omitempty" jsonschema:"optional Workout Builder structure (see tool description)"`
-}
-
 type fsStructureIn struct {
-	WorkoutKey string             `json:"workout_key" jsonschema:"key of an existing workout (from finalsurge_list_workouts or finalsurge_create_run_workout)"`
+	WorkoutKey string             `json:"workout_key" jsonschema:"key of an existing workout (from list_training_plan or upload_training_plan)"`
 	Name       string             `json:"name" jsonschema:"name shown on the device"`
 	Structure  []finalsurge.Block `json:"structure" jsonschema:"Workout Builder structure (see tool description)"`
 }
@@ -63,15 +48,15 @@ type preparedRun struct {
 }
 
 // prepareRun validates a run and builds its payloads without calling FinalSurge.
-func prepareRun(in runIn) (*preparedRun, error) {
-	if _, err := time.Parse("2006-01-02", in.Date); err != nil {
-		return nil, fmt.Errorf("date must be YYYY-MM-DD, got %q", in.Date)
+func prepareRun(in planSession) (*preparedRun, error) {
+	if _, err := parseDate("date", in.Date); err != nil {
+		return nil, err
 	}
 	if in.Name == "" {
 		return nil, fmt.Errorf("name is required")
 	}
 	p := &preparedRun{workout: finalsurge.NewRunWorkout{
-		Date: in.Date, Name: in.Name, Description: in.Description,
+		Date: in.Date, Name: in.Name, Description: in.Notes,
 		PlannedSeconds: in.PlannedMinutes * 60, PlannedDistance: in.PlannedDistance,
 	}}
 	if len(in.Structure) > 0 {
@@ -99,7 +84,7 @@ func (p *preparedRun) create(ctx context.Context, fs *finalsurge.Client) (runRes
 	if p.payload != nil {
 		if err := fs.SaveStructure(ctx, key, p.payload); err != nil {
 			res.StructureError = err.Error()
-			res.Note = "workout was created but the structure was not saved; retry with finalsurge_set_workout_structure"
+			res.Note = "workout was created but the structure was not saved; retry with update_run_structure"
 		} else {
 			res.StructureSaved = true
 		}
@@ -107,39 +92,26 @@ func (p *preparedRun) create(ctx context.Context, fs *finalsurge.Client) (runRes
 	return res, nil
 }
 
+// registerFinalSurge adds the run-specific tools. Runs are created with
+// upload_training_plan and listed with list_training_plan.
 func registerFinalSurge(s *mcp.Server, fs *finalsurge.Client) {
-	readOnly := &mcp.ToolAnnotations{ReadOnlyHint: true}
 	destructive := true
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "finalsurge_list_workouts",
-		Description: "List planned and completed workouts in the FinalSurge calendar between two dates (inclusive).",
-		Annotations: readOnly,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in fsListIn) (*mcp.CallToolResult, any, error) {
-		ws, err := fs.ListWorkouts(ctx, in.StartDate, in.EndDate)
+		Name:        "get_run_structure",
+		Description: "Read the raw Workout Builder structure of a FinalSurge run (as stored by FinalSurge).",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in fsKeyIn) (*mcp.CallToolResult, any, error) {
+		raw, err := fs.GetStructure(ctx, in.WorkoutKey)
 		if err != nil {
 			return nil, nil, err
 		}
-		return nil, map[string]any{"workouts": ws}, nil
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(raw)}}}, nil, nil
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name: "finalsurge_create_run_workout",
-		Description: "Create a planned run in FinalSurge on a given date, optionally with a structured Workout Builder plan " +
-			"(steps, repeats, pace targets) that syncs to the watch. Returns the new workout_key. " +
-			"To schedule several runs and strength sessions at once, use upload_training_plan.\n\n" + structureHelp,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in runIn) (*mcp.CallToolResult, runResult, error) {
-		p, err := prepareRun(in)
-		if err != nil {
-			return nil, runResult{}, err
-		}
-		res, err := p.create(ctx, fs)
-		return nil, res, err
-	})
-
-	mcp.AddTool(s, &mcp.Tool{
-		Name:        "finalsurge_set_workout_structure",
-		Description: "Replace the Workout Builder structure of an existing FinalSurge workout.\n\n" + structureHelp,
+		Name:        "update_run_structure",
+		Description: "Replace the Workout Builder structure (steps, repeats, pace targets) of an existing FinalSurge run.\n\n" + structureHelp,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in fsStructureIn) (*mcp.CallToolResult, any, error) {
 		payload, err := finalsurge.BuildStructure(in.Name, in.Structure, time.Now())
 		if err != nil {
@@ -152,19 +124,7 @@ func registerFinalSurge(s *mcp.Server, fs *finalsurge.Client) {
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "finalsurge_get_workout_structure",
-		Description: "Read the raw Workout Builder structure of a FinalSurge workout (as stored by FinalSurge).",
-		Annotations: readOnly,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in fsKeyIn) (*mcp.CallToolResult, any, error) {
-		raw, err := fs.GetStructure(ctx, in.WorkoutKey)
-		if err != nil {
-			return nil, nil, err
-		}
-		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(raw)}}}, nil, nil
-	})
-
-	mcp.AddTool(s, &mcp.Tool{
-		Name:        "finalsurge_delete_workout",
+		Name:        "delete_run",
 		Description: "Permanently delete a workout from the FinalSurge calendar. Cannot be undone; confirm with the user first.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &destructive},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in fsKeyIn) (*mcp.CallToolResult, any, error) {

@@ -1,9 +1,9 @@
 import { Check } from 'lucide-react';
-import type { WorkoutPlan } from '../lib/parser';
+import type { SavedWorkout } from '../lib/api';
 import type { WorkoutProgress } from './WorkoutView';
 
 interface SummaryProps {
-  plan: WorkoutPlan;
+  plan: SavedWorkout;
   progress: WorkoutProgress;
   onFinish: () => void;
 }
@@ -13,14 +13,13 @@ export default function Summary({ plan, progress, onFinish }: SummaryProps) {
 
   plan.blocks.forEach((block, bIdx) => {
     block.exercises.forEach((ex, eIdx) => {
-      const weightMatch = ex.weight.match(/(\d+(\.\d+)?)/);
-      const weightNum = weightMatch ? parseFloat(weightMatch[1]) : 0;
+      const weightNum = ex.weight_kg ?? 0;
       const repsMatch = ex.reps.match(/(\d+)/);
       const repsNum = repsMatch ? parseInt(repsMatch[1]) : 0;
 
       if (weightNum > 0 && repsNum > 0) {
         progress[bIdx][eIdx].forEach((set) => {
-          if (ex.isUnilateral) {
+          if (ex.per_side) {
             if (set.left) totalVolume += weightNum * repsNum;
             if (set.right) totalVolume += weightNum * repsNum;
           } else {
@@ -47,7 +46,7 @@ export default function Summary({ plan, progress, onFinish }: SummaryProps) {
         <Check size={48} strokeWidth={3} />
       </div>
       <h2 className="text-4xl font-black mb-2">Workout Complete</h2>
-      <p className="text-neutral-400 mb-8 text-lg">{plan.name}</p>
+      <p className="text-neutral-400 mb-8 text-lg">{plan.title}</p>
 
       {totalVolume > 0 && (
         <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 mb-10 w-full max-w-xs shadow-xl">

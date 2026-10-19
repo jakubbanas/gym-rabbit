@@ -1,10 +1,12 @@
-// Package mcpserver exposes Gym Rabbit's workout plans over the Model Context
-// Protocol, so AI assistants can list, read, write and validate plans.
+// Package mcpserver exposes the training plan over the Model Context Protocol:
+// strength workouts stored in Gym Rabbit and, when configured, runs in FinalSurge.
 package mcpserver
 
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -14,74 +16,56 @@ import (
 	"github.com/jakubbanas/gym-rabbit/internal/plan"
 )
 
-const formatURI = "gymrabbit://format"
+// strengthHelp is appended to tool descriptions that take strength blocks.
+const strengthHelp = `A strength workout is a list of blocks. A block is a group of exercises done together
+(superset or circuit); for straight sets use one exercise per block. The app labels exercises A1, A2, B1, …
+Exercise fields: name, sets, reps (string: "8", "8-10", "AMRAP", "45s"), rest_seconds (0 = go straight to the next
+exercise in the block), optional per_side (reps are per side), weight_kg (omit for bodyweight), load_note, cues.
+Example blocks:
+[{"exercises":[{"name":"Back Squat","sets":4,"reps":"6","weight_kg":100,"rest_seconds":150,"cues":["Brace before descent"]}]},
+ {"name":"Superset","exercises":[
+   {"name":"Bulgarian Split Squat","sets":3,"reps":"8","per_side":true,"weight_kg":16,"load_note":"per dumbbell","rest_seconds":0},
+   {"name":"Plank","sets":3,"reps":"45s","rest_seconds":90}]}]`
 
-// formatSpec documents the Magic Paste format for the model.
-const formatSpec = `# Gym Rabbit "Magic Paste" plan format
-
-Plan Name: [Descriptive Plan Title]
-
-Block [A-Z]
-[Exercise ID]. [Exercise Name] | [Sets]x[Reps] | [Weight] | [Rest]
-- [Optional technique cue or note line]
-
-Rules:
-- Every exercise line has exactly 4 fields separated by pipes (|).
-- At least one "Block ..." line is required.
-- Reps containing "+" (e.g. 8+8) mark the exercise as unilateral (left/right logging).
-- Rest is in seconds; the first number in the field is used (e.g. 90s -> 90).
-- Weight is free text (100kg, 20kg DBs, Bodyweight).
-- Lines starting with "-" directly below an exercise are form cues for that exercise.
-
-Example:
-
-Plan Name: Lower Body Strength
-
-Block A
-A1. Back Squat | 4x6 | 100kg | 120s
-- Brace before descent
-A2. Bulgarian Split Squat | 3x8+8 | 16kg DBs | 90s
-
-Block B
-B1. Romanian Deadlift | 3x10 | 80kg | 90s
-`
-
-type workoutSummary struct {
-	ID            string `json:"id"`
-	Title         string `json:"title"`
-	LastPerformed string `json:"lastPerformed" jsonschema:"RFC3339 timestamp of the last completed session, empty if never performed"`
-	ScheduledDate string `json:"scheduledDate" jsonschema:"day the session is planned for (YYYY-MM-DD), empty if unscheduled"`
-	UpdatedAt     string `json:"updatedAt"`
+type rangeInput struct {
+	StartDate string `json:"start_date" jsonschema:"first day, YYYY-MM-DD"`
+	EndDate   string `json:"end_date" jsonschema:"last day (inclusive), YYYY-MM-DD"`
 }
 
-type listOutput struct {
-	Workouts []workoutSummary `json:"workouts"`
+// planEntry is one session in list_training_plan, run or strength.
+type planEntry struct {
+	Date string `json:"date"`
+	Type string `json:"type" jsonschema:"strength (Gym Rabbit) or run (any FinalSurge calendar entry)"`
+	Name string `json:"name"`
+	ID   string `json:"id" jsonschema:"strength: workout ID for get/update/delete_strength_workout; run: FinalSurge workout_key"`
+
+	// strength
+	Exercises     int    `json:"exercises,omitempty"`
+	LastPerformed string `json:"last_performed,omitempty" jsonschema:"strength: when the session was last started in the app"`
+
+	// run
+	Activity       string  `json:"activity,omitempty" jsonschema:"run: FinalSurge activity type"`
+	Status         string  `json:"status,omitempty" jsonschema:"run: planned or completed status from FinalSurge"`
+	PlannedSeconds float64 `json:"planned_seconds,omitempty"`
+	PlannedKm      float64 `json:"planned_km,omitempty"`
+	HasStructure   bool    `json:"has_structure,omitempty" jsonschema:"run: has a Workout Builder structure"`
+}
+
+type planOutput struct {
+	Sessions []planEntry `json:"sessions"`
+	Note     string      `json:"note,omitempty"`
 }
 
 type idInput struct {
-	ID string `json:"id" jsonschema:"the workout ID, e.g. w-1735689600000000000"`
-}
-
-type workoutOutput struct {
-	db.Workout
-	Plan *plan.WorkoutPlan `json:"plan,omitempty" jsonschema:"the parsed plan structure, omitted if the stored text does not parse"`
-}
-
-type writeInput struct {
-	Title         string `json:"title" jsonschema:"display title for the saved plan"`
-	Text          string `json:"text" jsonschema:"the plan in Magic Paste format; read the gymrabbit://format resource for the spec"`
-	ScheduledDate string `json:"scheduled_date,omitempty" jsonschema:"optional day the session is planned for, YYYY-MM-DD"`
+	ID string `json:"id" jsonschema:"the strength workout ID (from list_training_plan or upload_training_plan)"`
 }
 
 type updateInput struct {
-	ID            string  `json:"id" jsonschema:"the workout ID to update"`
-	Title         string  `json:"title" jsonschema:"display title for the saved plan"`
-	Text          string  `json:"text" jsonschema:"the full replacement plan text in Magic Paste format"`
-	ScheduledDate *string `json:"scheduled_date,omitempty" jsonschema:"optional new planned day, YYYY-MM-DD; empty string unschedules; omit to keep the current one"`
-}
-
-type validateInput struct {
-	Text string `json:"text" jsonschema:"plan text in Magic Paste format"`
+	ID            string       `json:"id" jsonschema:"the strength workout ID to update"`
+	Title         string       `json:"title" jsonschema:"workout title"`
+	ScheduledDate string       `json:"scheduled_date" jsonschema:"planned day, YYYY-MM-DD"`
+	Notes         string       `json:"notes,omitempty" jsonschema:"note for the athlete; omitting it clears the current note"`
+	Blocks        []plan.Block `json:"blocks" jsonschema:"the full replacement list of blocks"`
 }
 
 type okOutput struct {
@@ -89,121 +73,109 @@ type okOutput struct {
 }
 
 // New builds the MCP server backed by the given database. If fs is non-nil,
-// the FinalSurge tools are registered and upload_training_plan accepts runs.
+// runs are enabled (in upload_training_plan, list_training_plan and the run tools).
 func New(database *db.DB, fs *finalsurge.Client) *mcp.Server {
-	s := mcp.NewServer(&mcp.Implementation{Name: "gym-rabbit", Title: "Gym Rabbit", Version: "1.0.0"}, &mcp.ServerOptions{
-		Instructions: "Gym Rabbit stores workout plans written in a pipe-delimited plain-text format. " +
-			"Read the " + formatURI + " resource before writing plan text, and use validate_plan to check drafts. " +
-			"To schedule a whole running + strength plan at once, use upload_training_plan.",
-	})
-
-	s.AddResource(&mcp.Resource{
-		URI:         formatURI,
-		Name:        "plan-format",
-		Title:       "Magic Paste plan format",
-		Description: "Specification and example of the plain-text workout plan format",
-		MIMEType:    "text/markdown",
-	}, func(_ context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{
-			{URI: formatURI, MIMEType: "text/markdown", Text: formatSpec},
-		}}, nil
+	s := mcp.NewServer(&mcp.Implementation{Name: "gym-rabbit", Title: "Gym Rabbit", Version: "2.0.0"}, &mcp.ServerOptions{
+		Instructions: "Gym Rabbit manages a dated training plan: strength workouts (structured blocks of exercises the " +
+			"athlete runs in the gym app) and, if FinalSurge is configured, runs in the FinalSurge calendar. " +
+			"Add sessions with upload_training_plan, see the plan with list_training_plan. Every write is validated " +
+			"and errors name the exact field to fix.",
 	})
 
 	readOnly := &mcp.ToolAnnotations{ReadOnlyHint: true}
 	destructive := true
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "list_workouts",
-		Description: "List saved workout plans, most recently updated first.",
+		Name:        "list_training_plan",
+		Description: "List every session between two dates (inclusive), runs and strength together, ordered by date.",
 		Annotations: readOnly,
-	}, func(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, listOutput, error) {
-		workouts, err := database.ListWorkouts()
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in rangeInput) (*mcp.CallToolResult, planOutput, error) {
+		start, err := parseDate("start_date", in.StartDate)
 		if err != nil {
-			return nil, listOutput{}, fmt.Errorf("failed to list workouts: %w", err)
+			return nil, planOutput{}, err
 		}
-		out := listOutput{Workouts: make([]workoutSummary, 0, len(workouts))}
+		end, err := parseDate("end_date", in.EndDate)
+		if err != nil {
+			return nil, planOutput{}, err
+		}
+		if end.Before(start) {
+			return nil, planOutput{}, fmt.Errorf("end_date is before start_date")
+		}
+
+		workouts, err := database.ListWorkoutsBetween(in.StartDate, in.EndDate)
+		if err != nil {
+			return nil, planOutput{}, fmt.Errorf("failed to list strength workouts: %w", err)
+		}
+		out := planOutput{Sessions: []planEntry{}}
 		for _, w := range workouts {
-			out.Workouts = append(out.Workouts, workoutSummary{ID: w.ID, Title: w.Title, LastPerformed: w.LastPerformed, ScheduledDate: w.ScheduledDate, UpdatedAt: w.UpdatedAt})
+			n := 0
+			for _, b := range w.Blocks {
+				n += len(b.Exercises)
+			}
+			out.Sessions = append(out.Sessions, planEntry{
+				Date: w.ScheduledDate, Type: "strength", Name: w.Title, ID: w.ID,
+				Exercises: n, LastPerformed: w.LastPerformed,
+			})
 		}
+
+		if fs == nil {
+			out.Note = "FinalSurge is not configured on this server, so runs are not listed."
+		} else {
+			runs, err := fs.ListWorkouts(ctx, in.StartDate, in.EndDate)
+			if err != nil {
+				return nil, planOutput{}, fmt.Errorf("failed to list FinalSurge workouts: %w", err)
+			}
+			for _, r := range runs {
+				out.Sessions = append(out.Sessions, planEntry{
+					Date: r.Date, Type: "run", Name: r.Name, ID: r.Key,
+					Activity: r.Activity, Status: r.Status, PlannedSeconds: r.PlannedSeconds,
+					PlannedKm: r.PlannedAmount, HasStructure: r.HasStructure,
+				})
+			}
+		}
+		sort.SliceStable(out.Sessions, func(i, j int) bool { return out.Sessions[i].Date < out.Sessions[j].Date })
 		return nil, out, nil
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "get_workout",
-		Description: "Get a saved workout plan's raw text and its parsed structure.",
+		Name:        "get_strength_workout",
+		Description: "Get a strength workout with all its blocks and exercises.",
 		Annotations: readOnly,
-	}, func(_ context.Context, _ *mcp.CallToolRequest, in idInput) (*mcp.CallToolResult, workoutOutput, error) {
+	}, func(_ context.Context, _ *mcp.CallToolRequest, in idInput) (*mcp.CallToolResult, db.Workout, error) {
 		w, err := database.GetWorkout(in.ID)
 		if err != nil {
-			return nil, workoutOutput{}, fmt.Errorf("failed to get workout: %w", err)
+			return nil, db.Workout{}, fmt.Errorf("failed to get workout: %w", err)
 		}
 		if w == nil {
-			return nil, workoutOutput{}, fmt.Errorf("workout not found: %s", in.ID)
-		}
-		parsed, _ := plan.Parse(w.Text)
-		return nil, workoutOutput{Workout: *w, Plan: parsed}, nil
-	})
-
-	mcp.AddTool(s, &mcp.Tool{
-		Name:        "validate_plan",
-		Description: "Parse plan text without saving it. Returns the parsed structure, or an error describing the first bad line.",
-		Annotations: readOnly,
-	}, func(_ context.Context, _ *mcp.CallToolRequest, in validateInput) (*mcp.CallToolResult, *plan.WorkoutPlan, error) {
-		parsed, err := plan.Parse(in.Text)
-		if err != nil {
-			return nil, nil, err
-		}
-		return nil, parsed, nil
-	})
-
-	mcp.AddTool(s, &mcp.Tool{
-		Name:        "create_workout",
-		Description: "Save a new workout plan. The text is validated against the Magic Paste format first.",
-	}, func(_ context.Context, _ *mcp.CallToolRequest, in writeInput) (*mcp.CallToolResult, db.Workout, error) {
-		if err := validateWrite(in.Title, in.Text); err != nil {
-			return nil, db.Workout{}, err
-		}
-		if err := validateDate(in.ScheduledDate); err != nil {
-			return nil, db.Workout{}, err
-		}
-		w := db.Workout{ID: db.NewID(), Title: in.Title, Text: in.Text, ScheduledDate: in.ScheduledDate}
-		if err := database.CreateWorkout(&w); err != nil {
-			return nil, db.Workout{}, fmt.Errorf("failed to create workout: %w", err)
-		}
-		return nil, w, nil
-	})
-
-	mcp.AddTool(s, &mcp.Tool{
-		Name:        "update_workout",
-		Description: "Replace the title and text of an existing workout plan. The text is validated first.",
-		Annotations: &mcp.ToolAnnotations{IdempotentHint: true},
-	}, func(_ context.Context, _ *mcp.CallToolRequest, in updateInput) (*mcp.CallToolResult, db.Workout, error) {
-		if err := validateWrite(in.Title, in.Text); err != nil {
-			return nil, db.Workout{}, err
-		}
-		if in.ScheduledDate != nil {
-			if err := validateDate(*in.ScheduledDate); err != nil {
-				return nil, db.Workout{}, err
-			}
-		}
-		if err := database.UpdateWorkout(&db.Workout{ID: in.ID, Title: in.Title, Text: in.Text}); err != nil {
-			return nil, db.Workout{}, err
-		}
-		if in.ScheduledDate != nil {
-			if err := database.SetScheduledDate(in.ID, *in.ScheduledDate); err != nil {
-				return nil, db.Workout{}, err
-			}
-		}
-		w, err := database.GetWorkout(in.ID)
-		if err != nil || w == nil {
-			return nil, db.Workout{}, fmt.Errorf("failed to reload workout %s", in.ID)
+			return nil, db.Workout{}, fmt.Errorf("workout not found: %s", in.ID)
 		}
 		return nil, *w, nil
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "delete_workout",
-		Description: "Permanently delete a saved workout plan.",
+		Name: "update_strength_workout",
+		Description: "Replace a strength workout: title, date, notes and blocks are all overwritten. Read it with " +
+			"get_strength_workout first and send back the full, edited workout.\n\n" + strengthHelp,
+		Annotations: &mcp.ToolAnnotations{IdempotentHint: true},
+	}, func(_ context.Context, _ *mcp.CallToolRequest, in updateInput) (*mcp.CallToolResult, db.Workout, error) {
+		w, err := newWorkout(in.Title, in.Notes, in.ScheduledDate, in.Blocks)
+		if err != nil {
+			return nil, db.Workout{}, err
+		}
+		w.ID = in.ID
+		if err := database.UpdateWorkout(w); err != nil {
+			return nil, db.Workout{}, err
+		}
+		updated, err := database.GetWorkout(in.ID)
+		if err != nil || updated == nil {
+			return nil, db.Workout{}, fmt.Errorf("failed to reload workout %s", in.ID)
+		}
+		return nil, *updated, nil
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "delete_strength_workout",
+		Description: "Permanently delete a strength workout.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &destructive, IdempotentHint: true},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, in idInput) (*mcp.CallToolResult, okOutput, error) {
 		if err := database.DeleteWorkout(in.ID); err != nil {
@@ -220,23 +192,32 @@ func New(database *db.DB, fs *finalsurge.Client) *mcp.Server {
 	return s
 }
 
-// validateDate accepts YYYY-MM-DD or empty (unscheduled).
-func validateDate(date string) error {
-	if date == "" {
-		return nil
+// newWorkout normalizes and validates a strength workout, reporting every
+// problem at once. It assigns a new ID.
+func newWorkout(title, notes, scheduledDate string, blocks []plan.Block) (*db.Workout, error) {
+	title, notes = strings.TrimSpace(title), strings.TrimSpace(notes)
+	plan.Normalize(blocks)
+
+	var problems []string
+	if title == "" {
+		problems = append(problems, "title: is required")
 	}
-	if _, err := time.Parse("2006-01-02", date); err != nil {
-		return fmt.Errorf("scheduled_date must be YYYY-MM-DD, got %q", date)
+	if _, err := parseDate("scheduled_date", scheduledDate); err != nil {
+		problems = append(problems, err.Error())
 	}
-	return nil
+	if err := plan.Validate(blocks); err != nil {
+		problems = append(problems, strings.TrimPrefix(err.Error(), "invalid workout:\n- "))
+	}
+	if len(problems) > 0 {
+		return nil, fmt.Errorf("invalid workout:\n- %s", strings.Join(problems, "\n- "))
+	}
+	return &db.Workout{ID: db.NewID(), Title: title, Notes: notes, ScheduledDate: scheduledDate, Blocks: blocks}, nil
 }
 
-func validateWrite(title, text string) error {
-	if title == "" || text == "" {
-		return fmt.Errorf("title and text are required")
+func parseDate(field, date string) (time.Time, error) {
+	t, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return t, fmt.Errorf("%s: must be YYYY-MM-DD, got %q", field, date)
 	}
-	if _, err := plan.Parse(text); err != nil {
-		return fmt.Errorf("invalid plan text (see %s): %w", formatURI, err)
-	}
-	return nil
+	return t, nil
 }

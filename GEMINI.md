@@ -7,15 +7,16 @@ Welcome to the **Gym Rabbit** developer manual. This document outlines the techn
 ## 🎯 The Core Philosophy & UX Flow
 
 Gym Rabbit is a high-focus, distraction-free gym companion designed for two actors:
-1. **The Trainer (The Planner):** Prefers zero form friction. Plans routines via a standardized, pipe-delimited plain-text template ("Magic Paste").
+1. **The Trainer (The Planner):** An AI agent (e.g. Claude) that writes structured workout plans through the MCP server, often together with the running plan in FinalSurge.
 2. **The Lifter (The Executor):** Needs an interface optimized for physical exhaustion. Uses giant, sweaty-hand friendly target elements, an ambient screen-wide rest timer, and direct haptic feedback.
 
 ```mermaid
 graph TD
-    Trainer[Trainer: Plain-Text Plan] -->|Paste/Tweak| WebApp[React SPA Frontend]
-    WebApp -->|Offline First| LocalStorage[(Browser LocalStorage)]
-    WebApp -->|Sync| GoAPI[Go Backend Server]
+    Trainer[Trainer: AI agent] -->|MCP + token| GoAPI[Go Backend Server]
+    GoAPI -->|runs| FinalSurge[FinalSurge calendar]
     GoAPI -->|WAL Mode| SQLite[(SQLite DB: gym-rabbit.db)]
+    WebApp[React SPA Frontend] -->|read-only REST| GoAPI
+    WebApp -->|Offline First| LocalStorage[(Browser LocalStorage)]
 ```
 
 ---
@@ -29,7 +30,7 @@ Gym Rabbit is configured as a lightweight monorepo containing a React SPA fronte
 * **Database:** SQLite database using `modernc.org/sqlite`. This is a **pure-Go SQLite driver** that requires no CGO compiler or native C toolchains to build.
 * **Database Modes:** Pragmatic optimizations are configured (e.g., WAL mode enabled for concurrent read/write stability).
 * **Static Asset Hosting:** When the production frontend is built, the backend checks for the presence of `frontend/dist` and serves the React SPA statically with client-side SPA routing fallbacks.
-* **CORS:** Built-in development middleware allowing API integration when running Vite in dev mode on a different port.
+* **Routing:** Go 1.22+ method patterns in `newMux` (`main.go`), covered by `main_test.go`. There is no CORS: in dev, Vite proxies `/api` to the backend, so the browser only ever talks to one origin.
 
 ### 2. React Frontend (`/frontend/...`)
 * **Core:** React 19, TypeScript, and Vite.
@@ -40,24 +41,33 @@ Gym Rabbit is configured as a lightweight monorepo containing a React SPA fronte
 
 ---
 
-## 📋 The "Magic Paste" Parser Engine
+## 📋 Workout Data Model
 
-Workout plans are parsed entirely offline on the client side from a standardized pipe-delimited format. 
+A strength workout is structured JSON, defined in `internal/plan` (Go, with validation) and mirrored in `frontend/src/lib/api.ts`. The `jsonschema` tags on the Go structs become the MCP tool schemas, so they are the documentation the agent sees. Field names are snake_case everywhere, the same as the FinalSurge run structure.
 
-### Format Specification
-```text
-Plan Name: [Descriptive Plan Title]
-
-Block [A-Z]
-[Exercise ID]. [Exercise Name] | [Sets]x[Reps] | [Weight] | [Rest]
-- [Optional technique cue or note line]
+```json
+{
+  "title": "Lower A",
+  "scheduled_date": "2026-10-21",
+  "notes": "Deload week",
+  "blocks": [
+    {"exercises": [
+      {"name": "Back Squat", "sets": 4, "reps": "6", "weight_kg": 100, "rest_seconds": 150, "cues": ["Brace before descent"]}
+    ]},
+    {"name": "Superset", "exercises": [
+      {"name": "Bulgarian Split Squat", "sets": 3, "reps": "8", "per_side": true, "weight_kg": 16, "load_note": "per dumbbell", "rest_seconds": 0},
+      {"name": "Plank", "sets": 3, "reps": "45s", "rest_seconds": 90}
+    ]}
+  ]
+}
 ```
 
-### Parsing & UX Rules
-* **Auto-Unilateral Mode:** If the `Reps` field contains a `+` symbol (e.g. `8+8`), the engine automatically flags the exercise as unilateral. In gym mode, this automatically splits the giant set logging button into separate **[ LEFT ]** and **[ RIGHT ]** target halves.
-* **Delimiter:** Strict pipe (`|`) splitters separate metadata fields.
-* **Cues:** Any line starting with a hyphen `-` directly below an exercise is parsed as a form cue/note and shown on the active exercise card.
-* **Flexible Weights:** Supports different measurement notations (e.g. `100kg`, `20kg DBs`, `Bodyweight`).
+* **Blocks** group exercises done together (superset/circuit); straight sets are one exercise per block. Unnamed blocks become `Block A`, `Block B`, …, and the app labels exercises `A1`, `A2`, `B1`.
+* **`per_side`** splits the giant set logging button into **[ LEFT ]** and **[ RIGHT ]** halves.
+* **`reps`** is a string (`"8"`, `"8-10"`, `"AMRAP"`, `"45s"`); the volume calculation uses its first number.
+* **`weight_kg`** is a number (omit for bodyweight); **`load_note`** is free text shown next to it.
+* **`rest_seconds: 0`** skips the rest screen, to go straight to the next exercise in a superset.
+* **Validation** (`plan.Validate`) reports every problem with its path, e.g. `blocks[1].exercises[0].sets`, so the agent can fix them all in one retry.
 
 ---
 
@@ -65,12 +75,14 @@ Block [A-Z]
 
 The Go backend exposes a [Model Context Protocol](https://modelcontextprotocol.io) server at **`/mcp`** (Streamable HTTP transport, via the official `github.com/modelcontextprotocol/go-sdk`). It lets AI assistants such as Claude read and write workout plans directly.
 
-* **Tools:** `list_workouts`, `get_workout` (raw text + parsed structure), `validate_plan`, `create_workout`, `update_workout`, `delete_workout`. Workouts have an optional `scheduled_date` (YYYY-MM-DD), shown as a badge on the dashboard.
-* **Hybrid plans:** `upload_training_plan` takes a list of dated sessions in one call. `run` sessions go to the FinalSurge calendar (with Workout Builder structure for the watch); `strength` sessions become Gym Rabbit workouts scheduled for that day. The whole plan is validated first and nothing is written if any session is invalid; `dry_run` validates only. Writes across the two systems aren't transactional, so the result reports each session as `created` or `failed`.
-* **FinalSurge:** set `FINALSURGE_EMAIL` and `FINALSURGE_PASSWORD` to enable runs and the `finalsurge_*` tools (`list_workouts`, `create_run_workout`, `set_workout_structure`, `get_workout_structure`, `delete_workout`). `internal/finalsurge` is copied from `../finalsurge-mcp` and talks to FinalSurge's **unofficial, reverse-engineered** API; see that repo's CLAUDE.md for its gotchas (never call `/api/logout`, keep builder output matching the captured payloads).
-* **Resource:** `gymrabbit://format` — the Magic Paste spec with an example, so the model writes valid plans.
-* **Validation:** `internal/plan` is a Go port of `frontend/src/lib/parser.ts`. MCP writes are rejected if the text would not parse in the app. **Keep the two parsers in sync.**
-* **Access model:** The REST API is public and **read-only** (`GET /api/workouts`), with one exception: `POST /api/workouts/{id}/performed`, so the gym UI can record finished sessions. Creating, editing and deleting plans happens **only through MCP**; REST writes return 405. The web UI only runs saved plans or one-off pasted "Quick Sessions" that are never saved.
+* **Tools** (one way to do each thing, so the agent never has to choose between duplicates):
+  * `upload_training_plan`: the only way to add sessions, one or many. `run` sessions go to the FinalSurge calendar (with Workout Builder structure for the watch); `strength` sessions become Gym Rabbit workouts on that day. The whole batch is validated first and nothing is written if any session is invalid; `dry_run` validates only. Writes across the two systems aren't transactional, so the result reports each session as `created` or `failed`.
+  * `list_training_plan(start_date, end_date)`: runs and strength together, ordered by date.
+  * `get_strength_workout`, `update_strength_workout` (full replacement of title, date, notes and blocks), `delete_strength_workout`.
+  * With FinalSurge configured: `get_run_structure`, `update_run_structure`, `delete_run`.
+* **Dates:** every strength workout has a required `scheduled_date` (YYYY-MM-DD). The dashboard shows Upcoming (today highlighted) and Past sessions.
+* **FinalSurge:** set `FINALSURGE_EMAIL` and `FINALSURGE_PASSWORD` to enable runs. `internal/finalsurge` is copied from `../finalsurge-mcp` and talks to FinalSurge's **unofficial, reverse-engineered** API: never call `/api/logout`, and keep the builder output matching the captured payloads in `builder_test.go`.
+* **Access model:** The REST API is public and **read-only** (`GET /api/workouts`), with one exception: `POST /api/workouts/{id}/performed`, so the gym UI can record finished sessions. Creating, editing and deleting plans happens **only through MCP**; REST writes return 405. The web UI only runs saved plans.
 * **Auth:** `/mcp` requires `Authorization: Bearer $MCP_TOKEN` (constant-time compare). If `MCP_TOKEN` is unset, `/mcp` is disabled (503), so the write path is never exposed without a token. Serve it over HTTPS only. For a claude.ai custom connector, configure the same header on the connector.
 
 Connect from Claude Code:
@@ -122,4 +134,4 @@ When editing or refactoring this codebase, you **must** adhere to the following 
 * **Binary Relativeness:** Ensure all file access (like checking for the `frontend/dist` directory or opening the sqlite DB file) is relative to the binary's working directory so it behaves identically inside and outside Docker.
 * **Modern Web APIs:** Always prioritize modern browser standards. For accessibility (a11y) debugging, utilize proper ARIA labeling on highly interactive, oversized set buttons.
 * **Glassmorphic Theme:** Retain the dark, premium theme (dark mode by default) using elegant background glassmorphic backdrops, harmonious color accents, and subtle borders. Avoid standard flat browser styles.
-* **Clean Code & Commits:** Maintain clear git commit guidelines. Ensure any modified templates or data structure updates are backward-compatible with browser `localStorage`.
+* **Clean Code & Commits:** Maintain clear git commit guidelines. Ensure data structure updates are backward-compatible with browser `localStorage`. Workouts saved in the old Magic Paste text format are dropped on startup, not converted (see `migrate` in `internal/db`).

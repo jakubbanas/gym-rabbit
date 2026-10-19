@@ -1,12 +1,51 @@
+// Mirrors internal/plan and internal/db on the server. Plans are written by
+// AI agents through MCP, so the field names match what the agent sends.
+
+export interface Exercise {
+  name: string;
+  sets: number;
+  /** e.g. "8", "8-10", "AMRAP", "45s" */
+  reps: string;
+  /** Reps are per side: log left and right separately. */
+  per_side?: boolean;
+  /** Omitted for bodyweight. */
+  weight_kg?: number;
+  /** e.g. "per dumbbell", "RPE 8". */
+  load_note?: string;
+  /** 0 = go straight to the next exercise in the block. */
+  rest_seconds: number;
+  cues?: string[];
+}
+
+/** Exercises done together (superset/circuit), or a single exercise. */
+export interface Block {
+  name: string;
+  exercises: Exercise[];
+}
+
 export interface SavedWorkout {
   id: string;
   title: string;
-  text: string;
-  lastPerformed: string;
-  /** YYYY-MM-DD the session is planned for, '' if unscheduled. Optional for older cached data. */
-  scheduledDate?: string;
-  createdAt: string;
-  updatedAt: string;
+  notes?: string;
+  /** YYYY-MM-DD the session is planned for. */
+  scheduled_date: string;
+  blocks: Block[];
+  last_performed?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Exercise label shown in the app: A1, A2, B1, … */
+export function exerciseLabel(blockIdx: number, exIdx: number): string {
+  return `${String.fromCharCode(65 + blockIdx)}${exIdx + 1}`;
+}
+
+/** Human-readable load: "100 kg · per dumbbell", "Bodyweight". */
+export function formatLoad(ex: Exercise): string {
+  const parts = [];
+  if (ex.weight_kg) parts.push(`${ex.weight_kg} kg`);
+  if (ex.load_note) parts.push(ex.load_note);
+  return parts.length ? parts.join(' · ') : 'Bodyweight';
 }
 
 // The REST API is read-only (plus marking a session performed).

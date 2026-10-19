@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 
 	"github.com/jakubbanas/gym-rabbit/internal/db"
 )
@@ -39,13 +38,7 @@ func (h *Handler) ListWorkouts(w http.ResponseWriter, r *http.Request) {
 
 // TouchLastPerformed handles POST /api/workouts/{id}/performed
 func (h *Handler) TouchLastPerformed(w http.ResponseWriter, r *http.Request) {
-	// URL is /api/workouts/{id}/performed — extract the id (second-to-last segment)
-	parts := strings.Split(strings.TrimSuffix(r.URL.Path, "/"), "/")
-	if len(parts) < 2 {
-		writeError(w, http.StatusBadRequest, "workout ID is required")
-		return
-	}
-	id := parts[len(parts)-2]
+	id := r.PathValue("id")
 
 	if err := h.DB.TouchLastPerformed(id); err != nil {
 		writeError(w, http.StatusNotFound, "workout not found")

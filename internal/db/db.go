@@ -2,22 +2,27 @@ package db
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"log"
 	"sync/atomic"
 	"time"
 
 	_ "modernc.org/sqlite"
+
+	"github.com/jakubbanas/gym-rabbit/internal/plan"
 )
 
-// Workout represents a saved workout plan.
+// Workout is a saved strength session.
 type Workout struct {
-	ID            string `json:"id"`
-	Title         string `json:"title"`
-	Text          string `json:"text"`
-	LastPerformed string `json:"lastPerformed"`
-	ScheduledDate string `json:"scheduledDate"`
-	CreatedAt     string `json:"createdAt"`
-	UpdatedAt     string `json:"updatedAt"`
+	ID            string       `json:"id"`
+	Title         string       `json:"title"`
+	Notes         string       `json:"notes,omitempty"`
+	ScheduledDate string       `json:"scheduled_date"`
+	Blocks        []plan.Block `json:"blocks"`
+	LastPerformed string       `json:"last_performed,omitempty"`
+	CreatedAt     string       `json:"created_at"`
+	UpdatedAt     string       `json:"updated_at"`
 }
 
 // DB wraps the sql.DB connection.
@@ -49,31 +54,40 @@ func (d *DB) Close() error {
 	return d.conn.Close()
 }
 
-func migrate(conn *sql.DB) error {
-	schema := `
+const workoutsSchema = `
 	CREATE TABLE IF NOT EXISTS workouts (
 		id TEXT PRIMARY KEY,
 		title TEXT NOT NULL,
-		text TEXT NOT NULL,
+		notes TEXT NOT NULL DEFAULT '',
+		scheduled_date TEXT NOT NULL,
+		blocks TEXT NOT NULL DEFAULT '[]',
 		last_performed TEXT NOT NULL DEFAULT '',
 		created_at TEXT NOT NULL,
 		updated_at TEXT NOT NULL
 	);`
-	if _, err := conn.Exec(schema); err != nil {
-		return err
-	}
 
-	// scheduled_date (YYYY-MM-DD, '' = unscheduled) was added later; add it to older databases.
-	var n int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('workouts') WHERE name = 'scheduled_date'`).Scan(&n); err != nil {
+func migrate(conn *sql.DB) error {
+	if _, err := conn.Exec(workoutsSchema); err != nil {
 		return err
 	}
-	if n == 0 {
-		if _, err := conn.Exec(`ALTER TABLE workouts ADD COLUMN scheduled_date TEXT NOT NULL DEFAULT ''`); err != nil {
-			return err
-		}
+	// Workouts from before the structured format (Magic Paste text) are
+	// discarded rather than converted: the old table is dropped and recreated.
+	legacy, err := hasColumn(conn, "text")
+	if err != nil || !legacy {
+		return err
 	}
-	return nil
+	log.Printf("dropping workouts saved in the old Magic Paste text format")
+	if _, err := conn.Exec(`DROP TABLE workouts`); err != nil {
+		return err
+	}
+	_, err = conn.Exec(workoutsSchema)
+	return err
+}
+
+func hasColumn(conn *sql.DB, name string) (bool, error) {
+	var n int
+	err := conn.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('workouts') WHERE name = ?`, name).Scan(&n)
+	return n > 0, err
 }
 
 var lastID atomic.Int64
@@ -96,61 +110,87 @@ func now() string {
 	return time.Now().UTC().Format(time.RFC3339)
 }
 
-// ListWorkouts returns all saved workouts ordered by most recently updated.
+const workoutColumns = `id, title, notes, scheduled_date, blocks, last_performed, created_at, updated_at`
+
+type scanner interface{ Scan(dest ...any) error }
+
+func scanWorkout(row scanner) (*Workout, error) {
+	var w Workout
+	var blocks string
+	if err := row.Scan(&w.ID, &w.Title, &w.Notes, &w.ScheduledDate, &blocks, &w.LastPerformed, &w.CreatedAt, &w.UpdatedAt); err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal([]byte(blocks), &w.Blocks); err != nil {
+		return nil, fmt.Errorf("workout %s has corrupt blocks: %w", w.ID, err)
+	}
+	return &w, nil
+}
+
+// ListWorkouts returns all saved workouts ordered by scheduled date.
 func (d *DB) ListWorkouts() ([]Workout, error) {
-	rows, err := d.conn.Query(`SELECT id, title, text, last_performed, scheduled_date, created_at, updated_at FROM workouts ORDER BY updated_at DESC`)
+	return d.queryWorkouts(`SELECT ` + workoutColumns + ` FROM workouts ORDER BY scheduled_date, created_at`)
+}
+
+// ListWorkoutsBetween returns workouts scheduled between start and end
+// (inclusive, YYYY-MM-DD), ordered by date.
+func (d *DB) ListWorkoutsBetween(start, end string) ([]Workout, error) {
+	return d.queryWorkouts(`SELECT `+workoutColumns+` FROM workouts WHERE scheduled_date BETWEEN ? AND ? ORDER BY scheduled_date, created_at`, start, end)
+}
+
+func (d *DB) queryWorkouts(query string, args ...any) ([]Workout, error) {
+	rows, err := d.conn.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var workouts []Workout
+	workouts := []Workout{}
 	for rows.Next() {
-		var w Workout
-		if err := rows.Scan(&w.ID, &w.Title, &w.Text, &w.LastPerformed, &w.ScheduledDate, &w.CreatedAt, &w.UpdatedAt); err != nil {
+		w, err := scanWorkout(rows)
+		if err != nil {
 			return nil, err
 		}
-		workouts = append(workouts, w)
-	}
-
-	if workouts == nil {
-		workouts = []Workout{}
+		workouts = append(workouts, *w)
 	}
 	return workouts, rows.Err()
 }
 
-// GetWorkout returns a single workout by ID.
+// GetWorkout returns a single workout by ID, or nil if it doesn't exist.
 func (d *DB) GetWorkout(id string) (*Workout, error) {
-	var w Workout
-	err := d.conn.QueryRow(`SELECT id, title, text, last_performed, scheduled_date, created_at, updated_at FROM workouts WHERE id = ?`, id).
-		Scan(&w.ID, &w.Title, &w.Text, &w.LastPerformed, &w.ScheduledDate, &w.CreatedAt, &w.UpdatedAt)
+	w, err := scanWorkout(d.conn.QueryRow(`SELECT `+workoutColumns+` FROM workouts WHERE id = ?`, id))
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
-	if err != nil {
-		return nil, err
-	}
-	return &w, nil
+	return w, err
 }
 
 // CreateWorkout inserts a new workout.
 func (d *DB) CreateWorkout(w *Workout) error {
+	blocks, err := json.Marshal(w.Blocks)
+	if err != nil {
+		return err
+	}
 	ts := now()
 	w.CreatedAt = ts
 	w.UpdatedAt = ts
-	_, err := d.conn.Exec(
-		`INSERT INTO workouts (id, title, text, last_performed, scheduled_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		w.ID, w.Title, w.Text, w.LastPerformed, w.ScheduledDate, w.CreatedAt, w.UpdatedAt,
+	_, err = d.conn.Exec(
+		`INSERT INTO workouts (`+workoutColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		w.ID, w.Title, w.Notes, w.ScheduledDate, string(blocks), w.LastPerformed, w.CreatedAt, w.UpdatedAt,
 	)
 	return err
 }
 
-// UpdateWorkout updates an existing workout's title and text.
+// UpdateWorkout replaces a workout's title, notes, date and blocks. It leaves
+// last_performed alone.
 func (d *DB) UpdateWorkout(w *Workout) error {
+	blocks, err := json.Marshal(w.Blocks)
+	if err != nil {
+		return err
+	}
 	w.UpdatedAt = now()
 	result, err := d.conn.Exec(
-		`UPDATE workouts SET title = ?, text = ?, updated_at = ? WHERE id = ?`,
-		w.Title, w.Text, w.UpdatedAt, w.ID,
+		`UPDATE workouts SET title = ?, notes = ?, scheduled_date = ?, blocks = ?, updated_at = ? WHERE id = ?`,
+		w.Title, w.Notes, w.ScheduledDate, string(blocks), w.UpdatedAt, w.ID,
 	)
 	if err != nil {
 		return err
@@ -158,19 +198,6 @@ func (d *DB) UpdateWorkout(w *Workout) error {
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
 		return fmt.Errorf("workout not found: %s", w.ID)
-	}
-	return nil
-}
-
-// SetScheduledDate sets the day a workout is planned for (YYYY-MM-DD, ” to unschedule).
-func (d *DB) SetScheduledDate(id, date string) error {
-	result, err := d.conn.Exec(`UPDATE workouts SET scheduled_date = ?, updated_at = ? WHERE id = ?`, date, now(), id)
-	if err != nil {
-		return err
-	}
-	rows, _ := result.RowsAffected()
-	if rows == 0 {
-		return fmt.Errorf("workout not found: %s", id)
 	}
 	return nil
 }

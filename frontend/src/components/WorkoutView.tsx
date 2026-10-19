@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { ArrowLeft, Clock, Check } from 'lucide-react';
-import type { WorkoutPlan, Exercise } from '../lib/parser';
+import { exerciseLabel, formatLoad, type SavedWorkout, type Exercise } from '../lib/api';
 import { triggerHaptic } from '../lib/audio';
 
 // Set progress for a single set
@@ -9,18 +9,18 @@ export type SetProgress = { left?: boolean; right?: boolean; done?: boolean };
 // Full progress structure: [blockIdx][exerciseIdx][setIdx]
 export type WorkoutProgress = SetProgress[][][];
 
-export function initProgress(plan: WorkoutPlan): WorkoutProgress {
+export function initProgress(plan: SavedWorkout): WorkoutProgress {
   return plan.blocks.map((b) =>
     b.exercises.map((ex) =>
       Array.from({ length: ex.sets }).map(() =>
-        ex.isUnilateral ? { left: false, right: false } : { done: false }
+        ex.per_side ? { left: false, right: false } : { done: false }
       )
     )
   );
 }
 
 interface WorkoutViewProps {
-  plan: WorkoutPlan;
+  plan: SavedWorkout;
   progress: WorkoutProgress;
   currentBlockIdx: number;
   onLogSet: (blockIdx: number, exIdx: number, setIdx: number, side: 'left' | 'right' | null) => void;
@@ -74,7 +74,7 @@ export default function WorkoutView({
           </button>
           <div>
             <h2 className="text-xs font-bold uppercase tracking-widest text-indigo-400 mb-1">
-              {plan.name}
+              {plan.title}
             </h2>
             <h1 className="text-3xl font-black">{block.name}</h1>
           </div>
@@ -96,39 +96,40 @@ export default function WorkoutView({
 
           // Find the current active set to log
           const activeSetIdx = setsProgress.findIndex((s) =>
-            ex.isUnilateral ? !s.left || !s.right : !s.done
+            ex.per_side ? !s.left || !s.right : !s.done
           );
           const activeSet = setsProgress[activeSetIdx];
           const isComplete = activeSetIdx === -1;
 
           return (
             <div
-              key={ex.id}
+              key={exIdx}
               className={`bg-neutral-900 border ${isComplete ? 'border-green-500/30' : 'border-neutral-800'} rounded-3xl p-5 shadow-xl transition-colors`}
             >
               {/* Exercise Header */}
               <div className="flex justify-between items-start mb-4">
                 <div className="pr-4">
                   <h3 className="text-xl font-bold leading-tight mb-1">
-                    <span className="text-neutral-500 mr-2">{ex.id}.</span>
+                    <span className="text-neutral-500 mr-2">{exerciseLabel(currentBlockIdx, exIdx)}.</span>
                     {ex.name}
                   </h3>
                   <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-sm font-medium text-neutral-400">
                     <span className="text-white bg-neutral-800 px-2 py-0.5 rounded-md">
                       {ex.sets} × {ex.reps}
+                      {ex.per_side && ' / side'}
                     </span>
                     <span>•</span>
-                    <span className="text-indigo-300">{ex.weight}</span>
+                    <span className="text-indigo-300">{formatLoad(ex)}</span>
                   </div>
                 </div>
                 <div className="flex items-center text-neutral-500 text-xs bg-neutral-950 px-2 py-1 rounded-lg gap-1">
                   <Clock size={14} />
-                  <span>{ex.rest}s</span>
+                  <span>{ex.rest_seconds > 0 ? `${ex.rest_seconds}s` : 'No rest'}</span>
                 </div>
               </div>
 
               {/* Cues */}
-              {ex.cues.length > 0 && !isComplete && (
+              {ex.cues && ex.cues.length > 0 && !isComplete && (
                 <div className="bg-indigo-950/30 rounded-xl p-3 mb-6">
                   {ex.cues.map((cue, i) => (
                     <p key={i} className="text-indigo-200/80 text-sm italic mb-1 last:mb-0">
@@ -141,7 +142,7 @@ export default function WorkoutView({
               {/* Set Progress Indicators */}
               <div className="flex gap-2 mb-6">
                 {setsProgress.map((s, i) => {
-                  const isSetDone = ex.isUnilateral ? s.left && s.right : s.done;
+                  const isSetDone = ex.per_side ? s.left && s.right : s.done;
                   const isCurrent = i === activeSetIdx;
                   return (
                     <div
@@ -160,7 +161,7 @@ export default function WorkoutView({
 
               {/* Giant Interactive Bubble */}
               {!isComplete ? (
-                ex.isUnilateral ? (
+                ex.per_side ? (
                   <div className="grid grid-cols-2 gap-3 mt-4">
                     <button
                       disabled={activeSet?.left}

@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/subtle"
 	"fmt"
-	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -33,102 +32,21 @@ func main() {
 	}
 	defer database.Close()
 
-	handler := &api.Handler{DB: database}
-
-	mux := http.NewServeMux()
-
-	// API routes. The REST API is public and read-only: plans are created,
-	// edited and deleted only through the token-protected MCP endpoint. The one
-	// exception is /performed, so the gym UI can still record finished sessions.
-	workoutsRoute := func(w http.ResponseWriter, r *http.Request) {
-		trimmed := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/workouts"), "/")
-		parts := strings.Split(trimmed, "/")
-
-		switch {
-		case trimmed == "":
-			// /api/workouts
-			if r.Method != http.MethodGet {
-				readOnly(w)
-				return
-			}
-			handler.ListWorkouts(w, r)
-		case len(parts) == 1:
-			// /api/workouts/{id}
-			readOnly(w)
-		case len(parts) == 2 && parts[1] == "performed":
-			// /api/workouts/{id}/performed
-			if r.Method != http.MethodPost {
-				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			handler.TouchLastPerformed(w, r)
-		default:
-			http.NotFound(w, r)
-		}
-	}
-	// Register both forms so /api/workouts is served directly instead of 307-redirected
-	mux.HandleFunc("/api/workouts", workoutsRoute)
-	mux.HandleFunc("/api/workouts/", workoutsRoute)
-
-	// MCP endpoint (Streamable HTTP) for AI assistants
 	// FinalSurge integration is enabled when credentials are present
-	var fs *finalsurge.Client
+	var finalSurge *finalsurge.Client
 	if email, pw := os.Getenv("FINALSURGE_EMAIL"), os.Getenv("FINALSURGE_PASSWORD"); email != "" && pw != "" {
-		fs = finalsurge.New(email, pw)
+		finalSurge = finalsurge.New(email, pw)
 		if u := os.Getenv("FINALSURGE_BASE_URL"); u != "" {
-			fs.BaseURL = u
+			finalSurge.BaseURL = u
 		}
 		log.Printf("FinalSurge integration enabled for MCP")
 	}
-	mcpServer := mcpserver.New(database, fs)
-	mcpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return mcpServer }, nil)
-	if token := os.Getenv("MCP_TOKEN"); token != "" {
-		mux.Handle("/mcp", bearerAuth(token, mcpHandler))
-	} else {
-		// MCP can write plans, so it is never served without a token.
+	token := os.Getenv("MCP_TOKEN")
+	if token == "" {
 		log.Printf("MCP_TOKEN is not set: /mcp is disabled")
-		mux.HandleFunc("/mcp", func(w http.ResponseWriter, r *http.Request) {
-			http.Error(w, "MCP is disabled: set MCP_TOKEN on the server", http.StatusServiceUnavailable)
-		})
 	}
 
-	// Serve React SPA from frontend/dist if it exists
-	distDir := "frontend/dist"
-	if _, err := os.Stat(distDir); err == nil {
-		frontendFS := http.Dir(distDir)
-		fileServer := http.FileServer(frontendFS)
-
-		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			// Try to serve the file directly
-			path := r.URL.Path
-			if path == "/" {
-				path = "/index.html"
-			}
-
-			// Check if file exists in dist
-			f, err := frontendFS.Open(path)
-			if err != nil {
-				if os.IsNotExist(err) || isPathError(err) {
-					// SPA fallback: serve index.html for client-side routing
-					r.URL.Path = "/"
-					fileServer.ServeHTTP(w, r)
-					return
-				}
-			}
-			if f != nil {
-				f.Close()
-			}
-
-			fileServer.ServeHTTP(w, r)
-		})
-	} else {
-		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			fmt.Fprintf(w, "Gym Rabbit API is running. Build the frontend with: cd frontend && npm run build")
-		})
-	}
-
-	// Add middleware chain: Logging -> CORS
-	handlerWithMiddleware := loggingMiddleware(corsMiddleware(mux))
+	mux := newMux(database, finalSurge, token, "frontend/dist")
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -136,9 +54,53 @@ func main() {
 	}
 
 	log.Printf("🐰 Gym Rabbit server starting on http://localhost:%s", port)
-	if err := http.ListenAndServe(":"+port, handlerWithMiddleware); err != nil {
+	if err := http.ListenAndServe(":"+port, loggingMiddleware(mux)); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
+}
+
+// newMux wires up the HTTP routes.
+func newMux(database *db.DB, finalSurge *finalsurge.Client, mcpToken, distDir string) *http.ServeMux {
+	handler := &api.Handler{DB: database}
+	mux := http.NewServeMux()
+
+	// The REST API is public and read-only: plans are created, edited and
+	// deleted only through the token-protected MCP endpoint. The one exception
+	// is /performed, so the gym UI can record started sessions. Other methods
+	// get 405 from the mux.
+	mux.HandleFunc("GET /api/workouts", handler.ListWorkouts)
+	mux.HandleFunc("POST /api/workouts/{id}/performed", handler.TouchLastPerformed)
+
+	// MCP endpoint (Streamable HTTP). MCP can write plans, so without a token
+	// it is disabled rather than open. Methods are listed explicitly so the
+	// routes don't conflict with the SPA's "GET /".
+	var mcpHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "MCP is disabled: set MCP_TOKEN on the server", http.StatusServiceUnavailable)
+	})
+	if mcpToken != "" {
+		mcpServer := mcpserver.New(database, finalSurge)
+		mcpHandler = bearerAuth(mcpToken, mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return mcpServer }, nil))
+	}
+	for _, method := range []string{"GET", "POST", "DELETE"} {
+		mux.Handle(method+" /mcp", mcpHandler)
+	}
+
+	// Serve the React SPA from distDir, falling back to index.html for
+	// client-side routes.
+	if _, err := os.Stat(distDir); err == nil {
+		fileServer := http.FileServer(http.Dir(distDir))
+		mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+			if _, err := os.Stat(filepath.Join(distDir, filepath.Clean("/"+r.URL.Path))); err != nil {
+				r.URL.Path = "/"
+			}
+			fileServer.ServeHTTP(w, r)
+		})
+	} else {
+		mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprintf(w, "Gym Rabbit API is running. Build the frontend with: cd frontend && npm run build")
+		})
+	}
+	return mux
 }
 
 type statusResponseWriter struct {
@@ -177,29 +139,6 @@ func loggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
-}
-
-// readOnly rejects REST writes, which are only allowed through MCP.
-func readOnly(w http.ResponseWriter) {
-	w.Header().Set("Allow", "GET")
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusMethodNotAllowed)
-	fmt.Fprintln(w, `{"error":"the REST API is read-only; create, edit and delete plans through MCP"}`)
-}
-
 // bearerAuth requires "Authorization: Bearer <token>".
 func bearerAuth(token string, next http.Handler) http.Handler {
 	expected := []byte("Bearer " + token)
@@ -210,9 +149,4 @@ func bearerAuth(token string, next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
-}
-
-func isPathError(err error) bool {
-	_, ok := err.(*fs.PathError)
-	return ok
 }

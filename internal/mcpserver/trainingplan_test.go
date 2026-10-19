@@ -38,6 +38,15 @@ func (f *fakeFinalSurge) server() *httptest.Server {
 			_ = json.NewDecoder(r.Body).Decode(&b)
 			f.created = append(f.created, b)
 			reply(map[string]any{"new_workout_key": "fs-" + b["name"].(string)})
+		case "/api/WorkoutList":
+			list := []map[string]any{}
+			for _, c := range f.created {
+				list = append(list, map[string]any{
+					"key": "fs-" + c["name"].(string), "workout_date": c["workout_date"], "name": c["name"],
+					"workout_status_text": "Planned", "Activities": []map[string]any{{"activity_type_name": "Run"}},
+				})
+			}
+			reply(map[string]any{"data": list})
 		case "/api/WorkoutBuilderSave":
 			f.structures = append(f.structures, r.URL.Query().Get("workout_key"))
 			reply(map[string]any{})
@@ -83,13 +92,20 @@ func upload(t *testing.T, cs *mcp.ClientSession, args map[string]any) (*mcp.Call
 
 var hybridPlan = []map[string]any{
 	{"type": "run", "date": "2026-10-20", "name": "Easy 40", "planned_minutes": 40},
-	{"type": "strength", "date": "2026-10-21", "text": "Plan Name: Lower A\n\nBlock A\nA1. Squat | 3x5 | 100kg | 120s"},
+	{"type": "strength", "date": "2026-10-21", "name": "Lower A", "blocks": []map[string]any{
+		{"exercises": []map[string]any{{"name": "Squat", "sets": 3, "reps": "5", "weight_kg": 100, "rest_seconds": 120}}},
+	}},
 	{"type": "run", "date": "2026-10-22", "name": "12x400", "structure": []map[string]any{
 		{"intensity": "warmup", "time": "10:00"},
 		{"repeats": 12, "steps": []map[string]any{{"distance_km": 0.4, "pace_fast": "4:30", "pace_slow": "4:40"}, {"intensity": "rest", "time": "1:30"}}},
 		{"intensity": "cooldown", "time": "10:00"},
 	}},
-	{"type": "strength", "date": "2026-10-23", "name": "Upper B", "text": "Block A\nA1. Bench | 3x8 | 70kg | 90s\nA2. Row | 3x8+8 | 24kg DBs | 60s"},
+	{"type": "strength", "date": "2026-10-23", "name": "Upper B", "notes": "Deload", "blocks": []map[string]any{
+		{"name": "Superset", "exercises": []map[string]any{
+			{"name": "Bench", "sets": 3, "reps": "8", "weight_kg": 70, "rest_seconds": 0},
+			{"name": "Row", "sets": 3, "reps": "8", "per_side": true, "weight_kg": 24, "load_note": "per dumbbell", "rest_seconds": 60},
+		}},
+	}},
 }
 
 func TestUploadTrainingPlan(t *testing.T) {
@@ -115,12 +131,19 @@ func TestUploadTrainingPlan(t *testing.T) {
 	}
 
 	ws, _ := database.ListWorkouts()
-	byDate := map[string]string{}
+	byDate := map[string]db.Workout{}
 	for _, w := range ws {
-		byDate[w.ScheduledDate] = w.Title
+		byDate[w.ScheduledDate] = w
 	}
-	if len(ws) != 2 || byDate["2026-10-21"] != "Lower A" || byDate["2026-10-23"] != "Upper B" {
-		t.Errorf("strength workouts: %+v", ws)
+	lower, upper := byDate["2026-10-21"], byDate["2026-10-23"]
+	if len(ws) != 2 || lower.Title != "Lower A" || upper.Title != "Upper B" || upper.Notes != "Deload" {
+		t.Fatalf("strength workouts: %+v", ws)
+	}
+	if lower.Blocks[0].Name != "Block A" {
+		t.Errorf("default block name: %q", lower.Blocks[0].Name)
+	}
+	if row := upper.Blocks[0].Exercises[1]; !row.PerSide || row.WeightKg != 24 || row.LoadNote != "per dumbbell" {
+		t.Errorf("row: %+v", row)
 	}
 }
 
@@ -134,16 +157,18 @@ func TestUploadTrainingPlanRejectsInvalidWithoutWriting(t *testing.T) {
 
 	bad := append([]map[string]any{}, hybridPlan...)
 	bad = append(bad,
-		map[string]any{"type": "strength", "date": "2026-10-24", "text": "Block A\nA1. Squat | 3x5 | 100kg"},
+		map[string]any{"type": "strength", "date": "2026-10-24", "name": "Bad", "blocks": []map[string]any{
+			{"exercises": []map[string]any{{"name": "Squat", "sets": 0, "reps": "5", "rest_seconds": 90}}},
+		}},
 		map[string]any{"type": "run", "date": "24.10.2026", "name": "Long"},
-		map[string]any{"type": "swim", "date": "2026-10-25"},
+		map[string]any{"type": "swim", "date": "2026-10-25", "name": "Swim"},
 	)
 	res, _ := upload(t, cs, map[string]any{"sessions": bad})
 	if !res.IsError {
 		t.Fatal("expected an error")
 	}
 	msg := res.Content[0].(*mcp.TextContent).Text
-	for _, want := range []string{"session 4", "session 5", "session 6", "nothing was written"} {
+	for _, want := range []string{"session 4", "blocks[0].exercises[0].sets", "session 5", "session 6", "nothing was written"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("error should mention %q:\n%s", want, msg)
 		}
@@ -170,10 +195,4 @@ func TestUploadTrainingPlanDryRunAndNoFinalSurge(t *testing.T) {
 		t.Errorf("dry run wrote %d workouts", len(ws))
 	}
 
-	tools, _ := cs.ListTools(context.Background(), nil)
-	for _, tool := range tools.Tools {
-		if strings.HasPrefix(tool.Name, "finalsurge_") {
-			t.Errorf("FinalSurge tool %s registered without credentials", tool.Name)
-		}
-	}
 }
