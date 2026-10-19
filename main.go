@@ -13,6 +13,7 @@ import (
 
 	"github.com/jakubbanas/gym-rabbit/internal/api"
 	"github.com/jakubbanas/gym-rabbit/internal/db"
+	"github.com/jakubbanas/gym-rabbit/internal/finalsurge"
 	"github.com/jakubbanas/gym-rabbit/internal/mcpserver"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -88,7 +89,16 @@ func main() {
 	mux.HandleFunc("/api/workouts/", workoutsRoute)
 
 	// MCP endpoint (Streamable HTTP) for AI assistants
-	mcpServer := mcpserver.New(database)
+	// FinalSurge integration is enabled when credentials are present
+	var fs *finalsurge.Client
+	if email, pw := os.Getenv("FINALSURGE_EMAIL"), os.Getenv("FINALSURGE_PASSWORD"); email != "" && pw != "" {
+		fs = finalsurge.New(email, pw)
+		if u := os.Getenv("FINALSURGE_BASE_URL"); u != "" {
+			fs.BaseURL = u
+		}
+		log.Printf("FinalSurge integration enabled for MCP")
+	}
+	mcpServer := mcpserver.New(database, fs)
 	mcpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return mcpServer }, nil)
 	mux.Handle("/mcp", bearerAuth(os.Getenv("MCP_TOKEN"), mcpHandler))
 

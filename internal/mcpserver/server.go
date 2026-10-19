@@ -5,10 +5,12 @@ package mcpserver
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jakubbanas/gym-rabbit/internal/db"
+	"github.com/jakubbanas/gym-rabbit/internal/finalsurge"
 	"github.com/jakubbanas/gym-rabbit/internal/plan"
 )
 
@@ -48,6 +50,7 @@ type workoutSummary struct {
 	ID            string `json:"id"`
 	Title         string `json:"title"`
 	LastPerformed string `json:"lastPerformed" jsonschema:"RFC3339 timestamp of the last completed session, empty if never performed"`
+	ScheduledDate string `json:"scheduledDate" jsonschema:"day the session is planned for (YYYY-MM-DD), empty if unscheduled"`
 	UpdatedAt     string `json:"updatedAt"`
 }
 
@@ -65,14 +68,16 @@ type workoutOutput struct {
 }
 
 type writeInput struct {
-	Title string `json:"title" jsonschema:"display title for the saved plan"`
-	Text  string `json:"text" jsonschema:"the plan in Magic Paste format; read the gymrabbit://format resource for the spec"`
+	Title         string `json:"title" jsonschema:"display title for the saved plan"`
+	Text          string `json:"text" jsonschema:"the plan in Magic Paste format; read the gymrabbit://format resource for the spec"`
+	ScheduledDate string `json:"scheduled_date,omitempty" jsonschema:"optional day the session is planned for, YYYY-MM-DD"`
 }
 
 type updateInput struct {
-	ID    string `json:"id" jsonschema:"the workout ID to update"`
-	Title string `json:"title" jsonschema:"display title for the saved plan"`
-	Text  string `json:"text" jsonschema:"the full replacement plan text in Magic Paste format"`
+	ID            string  `json:"id" jsonschema:"the workout ID to update"`
+	Title         string  `json:"title" jsonschema:"display title for the saved plan"`
+	Text          string  `json:"text" jsonschema:"the full replacement plan text in Magic Paste format"`
+	ScheduledDate *string `json:"scheduled_date,omitempty" jsonschema:"optional new planned day, YYYY-MM-DD; empty string unschedules; omit to keep the current one"`
 }
 
 type validateInput struct {
@@ -83,11 +88,13 @@ type okOutput struct {
 	OK bool `json:"ok"`
 }
 
-// New builds the MCP server backed by the given database.
-func New(database *db.DB) *mcp.Server {
+// New builds the MCP server backed by the given database. If fs is non-nil,
+// the FinalSurge tools are registered and upload_training_plan accepts runs.
+func New(database *db.DB, fs *finalsurge.Client) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "gym-rabbit", Title: "Gym Rabbit", Version: "1.0.0"}, &mcp.ServerOptions{
 		Instructions: "Gym Rabbit stores workout plans written in a pipe-delimited plain-text format. " +
-			"Read the " + formatURI + " resource before writing plan text, and use validate_plan to check drafts.",
+			"Read the " + formatURI + " resource before writing plan text, and use validate_plan to check drafts. " +
+			"To schedule a whole running + strength plan at once, use upload_training_plan.",
 	})
 
 	s.AddResource(&mcp.Resource{
@@ -116,7 +123,7 @@ func New(database *db.DB) *mcp.Server {
 		}
 		out := listOutput{Workouts: make([]workoutSummary, 0, len(workouts))}
 		for _, w := range workouts {
-			out.Workouts = append(out.Workouts, workoutSummary{ID: w.ID, Title: w.Title, LastPerformed: w.LastPerformed, UpdatedAt: w.UpdatedAt})
+			out.Workouts = append(out.Workouts, workoutSummary{ID: w.ID, Title: w.Title, LastPerformed: w.LastPerformed, ScheduledDate: w.ScheduledDate, UpdatedAt: w.UpdatedAt})
 		}
 		return nil, out, nil
 	})
@@ -156,7 +163,10 @@ func New(database *db.DB) *mcp.Server {
 		if err := validateWrite(in.Title, in.Text); err != nil {
 			return nil, db.Workout{}, err
 		}
-		w := db.Workout{ID: db.NewID(), Title: in.Title, Text: in.Text}
+		if err := validateDate(in.ScheduledDate); err != nil {
+			return nil, db.Workout{}, err
+		}
+		w := db.Workout{ID: db.NewID(), Title: in.Title, Text: in.Text, ScheduledDate: in.ScheduledDate}
 		if err := database.CreateWorkout(&w); err != nil {
 			return nil, db.Workout{}, fmt.Errorf("failed to create workout: %w", err)
 		}
@@ -171,8 +181,18 @@ func New(database *db.DB) *mcp.Server {
 		if err := validateWrite(in.Title, in.Text); err != nil {
 			return nil, db.Workout{}, err
 		}
+		if in.ScheduledDate != nil {
+			if err := validateDate(*in.ScheduledDate); err != nil {
+				return nil, db.Workout{}, err
+			}
+		}
 		if err := database.UpdateWorkout(&db.Workout{ID: in.ID, Title: in.Title, Text: in.Text}); err != nil {
 			return nil, db.Workout{}, err
+		}
+		if in.ScheduledDate != nil {
+			if err := database.SetScheduledDate(in.ID, *in.ScheduledDate); err != nil {
+				return nil, db.Workout{}, err
+			}
 		}
 		w, err := database.GetWorkout(in.ID)
 		if err != nil || w == nil {
@@ -192,7 +212,23 @@ func New(database *db.DB) *mcp.Server {
 		return nil, okOutput{OK: true}, nil
 	})
 
+	registerTrainingPlan(s, database, fs)
+	if fs != nil {
+		registerFinalSurge(s, fs)
+	}
+
 	return s
+}
+
+// validateDate accepts YYYY-MM-DD or empty (unscheduled).
+func validateDate(date string) error {
+	if date == "" {
+		return nil
+	}
+	if _, err := time.Parse("2006-01-02", date); err != nil {
+		return fmt.Errorf("scheduled_date must be YYYY-MM-DD, got %q", date)
+	}
+	return nil
 }
 
 func validateWrite(title, text string) error {

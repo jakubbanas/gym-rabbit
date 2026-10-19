@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -14,6 +15,7 @@ type Workout struct {
 	Title         string `json:"title"`
 	Text          string `json:"text"`
 	LastPerformed string `json:"lastPerformed"`
+	ScheduledDate string `json:"scheduledDate"`
 	CreatedAt     string `json:"createdAt"`
 	UpdatedAt     string `json:"updatedAt"`
 }
@@ -57,13 +59,37 @@ func migrate(conn *sql.DB) error {
 		created_at TEXT NOT NULL,
 		updated_at TEXT NOT NULL
 	);`
-	_, err := conn.Exec(schema)
-	return err
+	if _, err := conn.Exec(schema); err != nil {
+		return err
+	}
+
+	// scheduled_date (YYYY-MM-DD, '' = unscheduled) was added later; add it to older databases.
+	var n int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('workouts') WHERE name = 'scheduled_date'`).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
+		if _, err := conn.Exec(`ALTER TABLE workouts ADD COLUMN scheduled_date TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-// NewID creates a simple unique workout ID based on timestamp.
+var lastID atomic.Int64
+
+// NewID creates a unique workout ID based on timestamp. IDs are strictly
+// increasing, so calls in a tight loop (e.g. a bulk plan upload) never collide.
 func NewID() string {
-	return fmt.Sprintf("w-%d", time.Now().UnixNano())
+	for {
+		last, n := lastID.Load(), time.Now().UnixNano()
+		if n <= last {
+			n = last + 1
+		}
+		if lastID.CompareAndSwap(last, n) {
+			return fmt.Sprintf("w-%d", n)
+		}
+	}
 }
 
 func now() string {
@@ -72,7 +98,7 @@ func now() string {
 
 // ListWorkouts returns all saved workouts ordered by most recently updated.
 func (d *DB) ListWorkouts() ([]Workout, error) {
-	rows, err := d.conn.Query(`SELECT id, title, text, last_performed, created_at, updated_at FROM workouts ORDER BY updated_at DESC`)
+	rows, err := d.conn.Query(`SELECT id, title, text, last_performed, scheduled_date, created_at, updated_at FROM workouts ORDER BY updated_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +107,7 @@ func (d *DB) ListWorkouts() ([]Workout, error) {
 	var workouts []Workout
 	for rows.Next() {
 		var w Workout
-		if err := rows.Scan(&w.ID, &w.Title, &w.Text, &w.LastPerformed, &w.CreatedAt, &w.UpdatedAt); err != nil {
+		if err := rows.Scan(&w.ID, &w.Title, &w.Text, &w.LastPerformed, &w.ScheduledDate, &w.CreatedAt, &w.UpdatedAt); err != nil {
 			return nil, err
 		}
 		workouts = append(workouts, w)
@@ -96,8 +122,8 @@ func (d *DB) ListWorkouts() ([]Workout, error) {
 // GetWorkout returns a single workout by ID.
 func (d *DB) GetWorkout(id string) (*Workout, error) {
 	var w Workout
-	err := d.conn.QueryRow(`SELECT id, title, text, last_performed, created_at, updated_at FROM workouts WHERE id = ?`, id).
-		Scan(&w.ID, &w.Title, &w.Text, &w.LastPerformed, &w.CreatedAt, &w.UpdatedAt)
+	err := d.conn.QueryRow(`SELECT id, title, text, last_performed, scheduled_date, created_at, updated_at FROM workouts WHERE id = ?`, id).
+		Scan(&w.ID, &w.Title, &w.Text, &w.LastPerformed, &w.ScheduledDate, &w.CreatedAt, &w.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -113,8 +139,8 @@ func (d *DB) CreateWorkout(w *Workout) error {
 	w.CreatedAt = ts
 	w.UpdatedAt = ts
 	_, err := d.conn.Exec(
-		`INSERT INTO workouts (id, title, text, last_performed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		w.ID, w.Title, w.Text, w.LastPerformed, w.CreatedAt, w.UpdatedAt,
+		`INSERT INTO workouts (id, title, text, last_performed, scheduled_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		w.ID, w.Title, w.Text, w.LastPerformed, w.ScheduledDate, w.CreatedAt, w.UpdatedAt,
 	)
 	return err
 }
@@ -132,6 +158,19 @@ func (d *DB) UpdateWorkout(w *Workout) error {
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
 		return fmt.Errorf("workout not found: %s", w.ID)
+	}
+	return nil
+}
+
+// SetScheduledDate sets the day a workout is planned for (YYYY-MM-DD, ” to unschedule).
+func (d *DB) SetScheduledDate(id, date string) error {
+	result, err := d.conn.Exec(`UPDATE workouts SET scheduled_date = ?, updated_at = ? WHERE id = ?`, date, now(), id)
+	if err != nil {
+		return err
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("workout not found: %s", id)
 	}
 	return nil
 }

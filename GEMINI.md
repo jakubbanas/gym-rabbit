@@ -65,7 +65,9 @@ Block [A-Z]
 
 The Go backend exposes a [Model Context Protocol](https://modelcontextprotocol.io) server at **`/mcp`** (Streamable HTTP transport, via the official `github.com/modelcontextprotocol/go-sdk`). It lets AI assistants such as Claude read and write workout plans directly.
 
-* **Tools:** `list_workouts`, `get_workout` (raw text + parsed structure), `validate_plan`, `create_workout`, `update_workout`, `delete_workout`.
+* **Tools:** `list_workouts`, `get_workout` (raw text + parsed structure), `validate_plan`, `create_workout`, `update_workout`, `delete_workout`. Workouts have an optional `scheduled_date` (YYYY-MM-DD), shown as a badge on the dashboard.
+* **Hybrid plans:** `upload_training_plan` takes a list of dated sessions in one call. `run` sessions go to the FinalSurge calendar (with Workout Builder structure for the watch); `strength` sessions become Gym Rabbit workouts scheduled for that day. The whole plan is validated first and nothing is written if any session is invalid; `dry_run` validates only. Writes across the two systems aren't transactional, so the result reports each session as `created` or `failed`.
+* **FinalSurge:** set `FINALSURGE_EMAIL` and `FINALSURGE_PASSWORD` to enable runs and the `finalsurge_*` tools (`list_workouts`, `create_run_workout`, `set_workout_structure`, `get_workout_structure`, `delete_workout`). `internal/finalsurge` is copied from `../finalsurge-mcp` and talks to FinalSurge's **unofficial, reverse-engineered** API; see that repo's CLAUDE.md for its gotchas (never call `/api/logout`, keep builder output matching the captured payloads).
 * **Resource:** `gymrabbit://format` — the Magic Paste spec with an example, so the model writes valid plans.
 * **Validation:** `internal/plan` is a Go port of `frontend/src/lib/parser.ts`. MCP writes are rejected if the text would not parse in the app. **Keep the two parsers in sync.**
 * **Auth:** Set `MCP_TOKEN` to require `Authorization: Bearer <token>` on `/mcp`. If unset, the endpoint is open (like the REST API) — always set it when the server is reachable from outside your machine.

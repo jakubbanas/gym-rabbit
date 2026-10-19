@@ -11,6 +11,9 @@ services:
       - PORT=8080
       # Bearer token required on /mcp; leave empty to disable auth
       - MCP_TOKEN=${MCP_TOKEN:-}
+      # FinalSurge login for running plans over MCP; leave empty to disable
+      - FINALSURGE_EMAIL=${FINALSURGE_EMAIL:-}
+      - FINALSURGE_PASSWORD=${FINALSURGE_PASSWORD:-}
     volumes:
       # Bind mount the local ignored data directory for SQLite persistence
       - ./data:/app/data

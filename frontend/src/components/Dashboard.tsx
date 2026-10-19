@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Dumbbell, Plus, Pencil, Trash2 } from 'lucide-react';
+import { Dumbbell, Plus, Pencil, Trash2, CalendarDays } from 'lucide-react';
 import { fetchWorkouts, deleteWorkout, type SavedWorkout } from '../lib/api';
 
 interface DashboardProps {
@@ -82,7 +82,16 @@ export default function Dashboard({ onStartWorkout, onEditWorkout, onNewWorkout 
             >
               <div className="min-w-0 flex-1">
                 <h3 className="font-bold text-white mb-1 text-lg truncate">{workout.title}</h3>
-                <p className="text-sm text-neutral-400">Last: {formatDate(workout.lastPerformed)}</p>
+                <p className="text-sm text-neutral-400 flex items-center gap-2 flex-wrap">
+                  {workout.scheduledDate && (
+                    <span className="inline-flex items-center gap-1 text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 rounded-full px-2 py-0.5 text-xs font-semibold">
+                      <CalendarDays size={12} aria-hidden="true" />
+                      <span className="sr-only">Planned for </span>
+                      {formatDate(workout.scheduledDate)}
+                    </span>
+                  )}
+                  <span>Last: {formatDate(workout.lastPerformed)}</span>
+                </p>
               </div>
               <div className="flex items-center gap-1 ml-3 shrink-0">
                 <button

@@ -3,6 +3,8 @@ export interface SavedWorkout {
   title: string;
   text: string;
   lastPerformed: string;
+  /** YYYY-MM-DD the session is planned for, '' if unscheduled. Optional for older cached data. */
+  scheduledDate?: string;
   createdAt: string;
   updatedAt: string;
 }
