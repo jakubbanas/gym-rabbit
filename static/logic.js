@@ -196,3 +196,11 @@ export function calculatePlates(weightStr, barWeight = 20) {
   const loadedPerSide = plates.reduce((acc, p) => acc + p, 0);
   return { plates, actualTotal: barWeight + loadedPerSide * 2 };
 }
+
+export function stepNumberValue(raw, delta, fallback = 0) {
+  const parsed = parseFloat(String(raw ?? '').trim());
+  const base = Number.isNaN(parsed) ? fallback : parsed;
+  const next = Math.max(0, Math.round((base + delta) * 100) / 100);
+  return String(next);
+}
+

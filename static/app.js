@@ -2,7 +2,8 @@ import {
   esc, localToday, formatDay, formatTimestamp, formatRestClock, formatRestBadge,
   blockLetter, exerciseLabel, initProgress, progressMatchesWorkout,
   isSetComplete, hasSetProgress, hasAnyLoggedSet, isBlockComplete,
-  countSessionStats, undoSetInArray, renderCueHtml, calculatePlates,
+  parsePlannedReps, countSessionStats, undoSetInArray, renderCueHtml,
+  calculatePlates, stepNumberValue,
 } from './logic.js';
 
 const STORAGE_KEY = 'gym-rabbit:session:v1';
@@ -55,6 +56,26 @@ function triggerHaptic(pattern = 45) {
   if (navigator.vibrate) try { navigator.vibrate(pattern); } catch {}
 }
 
+let wakeLock = null;
+function syncWakeLock() {
+  const shouldKeepAwake = state.screen === 'workout' || Boolean(state.rest);
+  if (!('wakeLock' in navigator)) return;
+  if (shouldKeepAwake && document.visibilityState === 'visible') {
+    if (!wakeLock) {
+      navigator.wakeLock.request('screen').then((lock) => {
+        wakeLock = lock;
+        lock.addEventListener?.('release', () => {
+          if (wakeLock === lock) wakeLock = null;
+        });
+      }).catch(() => {});
+    }
+  } else if (wakeLock) {
+    const lock = wakeLock;
+    wakeLock = null;
+    lock.release().catch(() => {});
+  }
+}
+
 function loadSavedSession() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -79,7 +100,7 @@ const state = {
   session: loadSavedSession(), // { workoutId, workout, startedAt, currentBlockIdx, touchedPerformed, progress }
   expandedActuals: {}, // key -> true
   draftActuals: {},    // key -> { weight: string, reps: string }
-  rest: null,          // { endAt, nextText }
+  rest: null,          // { endAt, nextText, blockIdx, exIdx }
   drawerOpen: false,
   barWeight: 20,
   targetWeight: '',
@@ -87,6 +108,7 @@ const state = {
 };
 
 let restInterval = null;
+let lastLogTap = { key: '', at: 0 };
 const appRoot = document.getElementById('app');
 const restRoot = document.getElementById('rest-root');
 const drawerRoot = document.getElementById('drawer-root');
@@ -186,10 +208,15 @@ function logSet(blockIdx, exIdx, setIdx, side) {
   const workout = activeWorkout();
   if (!workout || !state.session) return;
 
+  const key = `${blockIdx}-${exIdx}`;
+  const tapKey = `${key}-${side ?? 'all'}`;
+  const now = Date.now();
+  if (lastLogTap.key === tapKey && now - lastLogTap.at < 400) return;
+  lastLogTap = { key: tapKey, at: now };
+
   unlockAudio();
   triggerHaptic(45);
 
-  const key = `${blockIdx}-${exIdx}`;
   const ex = workout.blocks[blockIdx].exercises[exIdx];
   const setObj = state.session.progress[blockIdx][exIdx][setIdx];
   const draft = state.draftActuals[key];
@@ -221,24 +248,27 @@ function logSet(blockIdx, exIdx, setIdx, side) {
 
   const stats = countSessionStats(workout, state.session.progress);
   if (ex.rest_seconds > 0 && stats.doneSets < stats.totalSets) {
-    startRestTimer(ex.rest_seconds, computeNextRestLabel(workout, state.session.progress, blockIdx, exIdx));
+    startRestTimer(ex.rest_seconds, computeNextRestLabel(workout, state.session.progress, blockIdx, exIdx), blockIdx, exIdx);
   }
   render();
 }
 
 function undoLastSet(blockIdx, exIdx) {
   const workout = activeWorkout();
-  if (!workout || !state.session) return;
+  if (!workout || !state.session) return false;
   if (undoSetInArray(workout.blocks[blockIdx].exercises[exIdx], state.session.progress[blockIdx][exIdx])) {
     saveSession(state.session);
     render();
+    return true;
   }
+  return false;
 }
 
-function startRestTimer(seconds, nextText) {
+function startRestTimer(seconds, nextText, blockIdx = null, exIdx = null) {
   stopRestTimer(false);
-  state.rest = { endAt: Date.now() + seconds * 1000, nextText };
+  state.rest = { endAt: Date.now() + seconds * 1000, nextText, blockIdx, exIdx };
   renderRest();
+  syncWakeLock();
   restInterval = window.setInterval(tickRestTimer, 200);
 }
 
@@ -267,11 +297,13 @@ function stopRestTimer(rerender = true) {
     restInterval = null;
   }
   state.rest = null;
+  syncWakeLock();
   if (rerender) renderRest();
 }
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && state.rest) tickRestTimer();
+  syncWakeLock();
 });
 
 function renderSleeveResultHtml() {
@@ -430,8 +462,11 @@ function renderWorkout() {
       const draft = state.draftActuals[key] ?? { weight: ex.weight_kg != null ? String(ex.weight_kg) : '', reps: '' };
 
       const pctMatch = ex.reps.match(/(\d+)\s*%\s*amrap/i);
-      const amrapHint = pctMatch && blockAmrapReps != null
-        ? `<span class="pill hint">Target: ~${Math.max(1, Math.round((blockAmrapReps * parseInt(pctMatch[1], 10)) / 100))} reps (${pctMatch[1]}% of ${blockAmrapReps})</span>`
+      const amrapTarget = pctMatch && blockAmrapReps != null
+        ? Math.max(1, Math.round((blockAmrapReps * parseInt(pctMatch[1], 10)) / 100))
+        : null;
+      const amrapHint = amrapTarget != null
+        ? `<span class="pill hint">Target: ~${amrapTarget} reps (${pctMatch[1]}% of ${blockAmrapReps})</span>`
         : '';
 
       const loadHtml = ex.weight_kg
@@ -464,15 +499,25 @@ function renderWorkout() {
           </div>`
         : '';
 
+      const weightFallback = ex.weight_kg ?? 0;
+      const repsFallback = amrapTarget ?? parsePlannedReps(ex.reps);
       const actualsPanelHtml = showActuals && !isComplete
         ? `<div class="actuals-panel">
             <div>
               <label class="field-label" for="actual-weight-${key}">Weight (kg)</label>
-              <input id="actual-weight-${key}" data-actual-key="${key}" data-actual-field="weight" type="number" inputmode="decimal" step="0.5" placeholder="${ex.weight_kg ?? '0'}" value="${esc(draft.weight)}" />
+              <div class="actual-stepper">
+                <button type="button" class="actual-step-btn" data-action="step-actual" data-key="${key}" data-field="weight" data-delta="-2.5" data-fallback="${weightFallback}" aria-label="Decrease weight by 2.5 kg">−2.5</button>
+                <input id="actual-weight-${key}" data-actual-key="${key}" data-actual-field="weight" type="number" inputmode="decimal" step="0.5" placeholder="${ex.weight_kg ?? '0'}" value="${esc(draft.weight)}" />
+                <button type="button" class="actual-step-btn" data-action="step-actual" data-key="${key}" data-field="weight" data-delta="2.5" data-fallback="${weightFallback}" aria-label="Increase weight by 2.5 kg">+2.5</button>
+              </div>
             </div>
             <div>
               <label class="field-label" for="actual-reps-${key}">Reps done</label>
-              <input id="actual-reps-${key}" data-actual-key="${key}" data-actual-field="reps" type="number" inputmode="numeric" placeholder="${esc(ex.reps)}" value="${esc(draft.reps)}" />
+              <div class="actual-stepper">
+                <button type="button" class="actual-step-btn" data-action="step-actual" data-key="${key}" data-field="reps" data-delta="-1" data-fallback="${repsFallback}" aria-label="Decrease reps by 1">−1</button>
+                <input id="actual-reps-${key}" data-actual-key="${key}" data-actual-field="reps" type="number" inputmode="numeric" placeholder="${repsFallback || esc(ex.reps)}" value="${esc(draft.reps)}" />
+                <button type="button" class="actual-step-btn" data-action="step-actual" data-key="${key}" data-field="reps" data-delta="1" data-fallback="${repsFallback}" aria-label="Increase reps by 1">+1</button>
+              </div>
             </div>
           </div>`
         : '';
@@ -481,8 +526,8 @@ function renderWorkout() {
         ? `<div class="completed-banner">${ICONS.check}<span>Completed</span></div>`
         : ex.per_side
           ? `<div class="split-grid">
-              <button type="button" class="log-btn" ${activeSet.left ? 'disabled' : ''} data-action="log-set" data-block="${blockIdx}" data-ex="${exIdx}" data-set="${activeSetIdx}" data-side="left" aria-label="Log set ${activeSetIdx + 1} left side for ${esc(ex.name)}"><span class="sub">Set ${activeSetIdx + 1}</span>LEFT</button>
-              <button type="button" class="log-btn" ${activeSet.right ? 'disabled' : ''} data-action="log-set" data-block="${blockIdx}" data-ex="${exIdx}" data-set="${activeSetIdx}" data-side="right" aria-label="Log set ${activeSetIdx + 1} right side for ${esc(ex.name)}"><span class="sub">Set ${activeSetIdx + 1}</span>RIGHT</button>
+              <button type="button" class="log-btn ${activeSet.left ? 'side-done' : ''}" ${activeSet.left ? 'disabled' : ''} data-action="log-set" data-block="${blockIdx}" data-ex="${exIdx}" data-set="${activeSetIdx}" data-side="left" aria-label="Log set ${activeSetIdx + 1} left side for ${esc(ex.name)}"><span class="sub">Set ${activeSetIdx + 1}</span>${activeSet.left ? '✓ LEFT' : 'LEFT'}</button>
+              <button type="button" class="log-btn ${activeSet.right ? 'side-done' : ''}" ${activeSet.right ? 'disabled' : ''} data-action="log-set" data-block="${blockIdx}" data-ex="${exIdx}" data-set="${activeSetIdx}" data-side="right" aria-label="Log set ${activeSetIdx + 1} right side for ${esc(ex.name)}"><span class="sub">Set ${activeSetIdx + 1}</span>${activeSet.right ? '✓ RIGHT' : 'RIGHT'}</button>
             </div>`
           : `<button type="button" class="log-btn" data-action="log-set" data-block="${blockIdx}" data-ex="${exIdx}" data-set="${activeSetIdx}" aria-label="Log set ${activeSetIdx + 1} for ${esc(ex.name)}"><span class="sub">Set ${activeSetIdx + 1} of ${ex.sets}</span>LOG SET</button>`;
 
@@ -490,7 +535,7 @@ function renderWorkout() {
         <article class="exercise-card ${isComplete ? 'complete' : ''}">
           <div class="ex-top">
             <div>
-              <h3 class="ex-title"><span class="ex-label">${esc(exerciseLabel(block, blockIdx, exIdx))}.</span>${esc(ex.name)}</h3>
+              <h3 class="ex-title"><span class="ex-label">${esc(exerciseLabel(block, blockIdx, exIdx))}. </span>${esc(ex.name)}</h3>
               <div class="ex-badges">
                 <span class="pill">${ex.sets} × ${esc(ex.reps)}${ex.per_side ? ' / side' : ''}</span>
                 ${loadHtml}
@@ -551,8 +596,9 @@ function renderSummary() {
 
   let funMessage = '';
   if (stats.totalVolume > 0) {
-    if (stats.totalVolume < 500) funMessage = "That's equivalent to lifting a grand piano! 🎹";
-    else if (stats.totalVolume < 1500) funMessage = "That's equivalent to lifting an adult grizzly bear! 🐻";
+    if (stats.totalVolume < 200) funMessage = "That's equivalent to lifting an adult lion! 🦁";
+    else if (stats.totalVolume < 500) funMessage = "That's equivalent to lifting a grand piano! 🎹";
+    else if (stats.totalVolume < 1500) funMessage = "That's equivalent to lifting a polar bear! 🐻‍❄️";
     else if (stats.totalVolume < 3000) funMessage = "That's equivalent to lifting a rhinoceros! 🦏";
     else if (stats.totalVolume < 5000) funMessage = "That's equivalent to lifting an entire hippopotamus! 🦛";
     else if (stats.totalVolume < 10000) funMessage = "That's equivalent to lifting an elephant! 🐘";
@@ -586,6 +632,7 @@ function renderRest() {
     return;
   }
   const remaining = Math.max(0, Math.ceil((state.rest.endAt - Date.now()) / 1000));
+  const canUndo = state.rest.blockIdx != null && state.rest.exIdx != null;
   restRoot.innerHTML = `
     <div class="rest-screen" role="dialog" aria-modal="true" aria-label="Rest timer">
       <div class="rest-top">
@@ -602,6 +649,7 @@ function renderRest() {
           <button type="button" class="rest-adjust-btn" data-action="rest-adjust" data-delta="15">+15s</button>
         </div>
         <button type="button" class="rest-skip-btn" data-action="skip-rest">Skip Rest</button>
+        ${canUndo ? `<button type="button" class="rest-undo-btn" data-action="rest-undo">${ICONS.undo}<span>Undo Last Set</span></button>` : ''}
       </div>
     </div>
   `;
@@ -668,6 +716,7 @@ function render() {
   else appRoot.innerHTML = renderDashboard();
   renderRest();
   renderDrawer();
+  syncWakeLock();
 }
 
 document.addEventListener('click', (e) => {
@@ -757,6 +806,15 @@ document.addEventListener('click', (e) => {
       render();
       break;
     }
+    case 'step-actual': {
+      const { key, field, delta, fallback } = target.dataset;
+      state.draftActuals[key] ??= { weight: '', reps: '' };
+      const next = stepNumberValue(state.draftActuals[key][field], Number(delta), Number(fallback) || 0);
+      state.draftActuals[key][field] = next;
+      const input = document.getElementById(`actual-${field}-${key}`);
+      if (input) input.value = next;
+      break;
+    }
     case 'finish-workout':
       state.screen = 'summary';
       render();
@@ -777,6 +835,13 @@ document.addEventListener('click', (e) => {
     case 'skip-rest':
       stopRestTimer(true);
       break;
+    case 'rest-undo': {
+      if (!state.rest) break;
+      const { blockIdx, exIdx } = state.rest;
+      stopRestTimer(true);
+      if (blockIdx != null && exIdx != null) undoLastSet(blockIdx, exIdx);
+      break;
+    }
     case 'open-barbell': {
       const w = target.dataset.weight ? parseFloat(target.dataset.weight) : null;
       if (w != null && w > 0) state.targetWeight = String(w);
@@ -800,8 +865,7 @@ document.addEventListener('click', (e) => {
       renderDrawer();
       break;
     case 'step-weight': {
-      const base = Number.isNaN(parseFloat(state.targetWeight)) ? state.barWeight : parseFloat(state.targetWeight);
-      state.targetWeight = String(Math.max(0, Math.round((base + Number(target.dataset.delta)) * 100) / 100));
+      state.targetWeight = stepNumberValue(state.targetWeight, Number(target.dataset.delta), state.barWeight);
       const input = document.getElementById('barbell-weight-input');
       if (input) input.value = state.targetWeight;
       const res = document.getElementById('sleeve-result');

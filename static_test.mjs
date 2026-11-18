@@ -12,6 +12,7 @@ import {
   renderCueHtml,
   calculatePlates,
   formatRestClock,
+  stepNumberValue,
 } from './static/logic.js';
 
 test('exerciseLabel uses trailing block letter or position fallback', () => {
@@ -91,3 +92,11 @@ test('progressMatchesWorkout rejects stale saved progress after plan edits', () 
   assert.equal(formatRestClock(120), '2:00');
   assert.equal(formatRestClock(45), '45');
 });
+
+test('stepNumberValue uses fallback when blank, clamps at 0, and rounds decimals', () => {
+  assert.equal(stepNumberValue('', 1, 7), '8');
+  assert.equal(stepNumberValue('', -1, 7), '6');
+  assert.equal(stepNumberValue('80', 2.5, 20), '82.5');
+  assert.equal(stepNumberValue('1', -2.5, 0), '0');
+});
+
