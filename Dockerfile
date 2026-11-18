@@ -1,20 +1,5 @@
 # ==========================================
-# Stage 1: Build the React Frontend
-# ==========================================
-FROM node:20-alpine AS frontend-builder
-
-WORKDIR /build/frontend
-
-# Install dependencies using npm ci for clean, deterministic builds
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
-
-# Copy the remaining frontend code and build
-COPY frontend/ ./
-RUN npm run build
-
-# ==========================================
-# Stage 2: Build the Go Backend
+# Stage 1: Build the Go Backend (+ embedded static UI)
 # ==========================================
 FROM golang:1.26-alpine AS backend-builder
 
@@ -24,15 +9,16 @@ WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy the backend source files
+# Copy source and static frontend assets (embedded via //go:embed)
 COPY main.go ./
 COPY internal/ ./internal/
+COPY static/ ./static/
 
-# Build a highly optimized, static Go binary
+# Build a static Go binary
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o gym-rabbit main.go
 
 # ==========================================
-# Stage 3: Runner Container
+# Stage 2: Runner Container
 # ==========================================
 FROM alpine:3.20
 
@@ -41,11 +27,8 @@ RUN apk --no-cache add ca-certificates tzdata
 
 WORKDIR /app
 
-# Copy the static backend binary
+# Copy the static binary (includes embedded static UI)
 COPY --from=backend-builder /build/gym-rabbit /app/gym-rabbit
-
-# Copy the built frontend static assets into the correct relative path
-COPY --from=frontend-builder /build/frontend/dist /app/frontend/dist
 
 # Define volume for persistent database storage
 VOLUME ["/app/data"]

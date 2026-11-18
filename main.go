@@ -2,10 +2,12 @@ package main
 
 import (
 	"crypto/subtle"
-	"fmt"
+	"embed"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -16,6 +18,20 @@ import (
 	"github.com/jakubbanas/gym-rabbit/internal/mcpserver"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+//go:embed static
+var embeddedStatic embed.FS
+
+func resolveStaticFS() fs.FS {
+	if info, err := os.Stat("static"); err == nil && info.IsDir() {
+		return os.DirFS("static")
+	}
+	sub, err := fs.Sub(embeddedStatic, "static")
+	if err != nil {
+		log.Fatalf("Failed to load embedded static assets: %v", err)
+	}
+	return sub
+}
 
 func main() {
 	// Determine database path
@@ -46,7 +62,7 @@ func main() {
 		log.Printf("MCP_TOKEN is not set: /mcp is disabled")
 	}
 
-	mux := newMux(database, finalSurge, token, "frontend/dist")
+	mux := newMux(database, finalSurge, token, resolveStaticFS())
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -60,7 +76,7 @@ func main() {
 }
 
 // newMux wires up the HTTP routes.
-func newMux(database *db.DB, finalSurge *finalsurge.Client, mcpToken, distDir string) *http.ServeMux {
+func newMux(database *db.DB, finalSurge *finalsurge.Client, mcpToken string, staticFS fs.FS) *http.ServeMux {
 	handler := &api.Handler{DB: database}
 	mux := http.NewServeMux()
 
@@ -85,21 +101,20 @@ func newMux(database *db.DB, finalSurge *finalsurge.Client, mcpToken, distDir st
 		mux.Handle(method+" /mcp", mcpHandler)
 	}
 
-	// Serve the React SPA from distDir, falling back to index.html for
+	// Serve the embedded static frontend, falling back to index.html for
 	// client-side routes.
-	if _, err := os.Stat(distDir); err == nil {
-		fileServer := http.FileServer(http.Dir(distDir))
-		mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-			if _, err := os.Stat(filepath.Join(distDir, filepath.Clean("/"+r.URL.Path))); err != nil {
-				r.URL.Path = "/"
-			}
-			fileServer.ServeHTTP(w, r)
-		})
-	} else {
-		mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-			fmt.Fprintf(w, "Gym Rabbit API is running. Build the frontend with: cd frontend && npm run build")
-		})
-	}
+	fileServer := http.FileServerFS(staticFS)
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		rel := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
+		if rel == "" {
+			rel = "index.html"
+		}
+		if info, err := fs.Stat(staticFS, rel); err != nil || info.IsDir() {
+			r.URL.Path = "/"
+		}
+		w.Header().Set("Cache-Control", "no-cache")
+		fileServer.ServeHTTP(w, r)
+	})
 	return mux
 }
 

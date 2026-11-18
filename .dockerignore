@@ -2,10 +2,6 @@
 .gitignore
 data/
 *.db
-frontend/node_modules/
-frontend/dist/
-frontend/dist-ssr/
-node_modules/
 .DS_Store
 .idea/
 .vscode/

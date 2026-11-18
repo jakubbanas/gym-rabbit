@@ -1,11 +1,12 @@
 package main
 
 import (
+	"io/fs"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/jakubbanas/gym-rabbit/internal/db"
 	"github.com/jakubbanas/gym-rabbit/internal/plan"
@@ -25,10 +26,21 @@ func TestRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dist := filepath.Join(dir, "dist")
-	os.MkdirAll(filepath.Join(dist, "assets"), 0o755)
-	os.WriteFile(filepath.Join(dist, "index.html"), []byte("<title>Gym Rabbit</title>"), 0o644)
-	os.WriteFile(filepath.Join(dist, "assets", "app.js"), []byte("console.log(1)"), 0o644)
+	staticFS := fstest.MapFS{
+		"index.html": {Data: []byte("<title>Gym Rabbit</title>")},
+		"app.js":     {Data: []byte("console.log(1)")},
+	}
+
+	// Ensure embedded assets are bundled cleanly
+	embeddedSub, err := fs.Sub(embeddedStatic, "static")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, asset := range []string{"index.html", "style.css", "app.js", "logic.js"} {
+		if _, err := fs.Stat(embeddedSub, asset); err != nil {
+			t.Fatalf("embedded %s missing: %v", asset, err)
+		}
+	}
 
 	for _, tc := range []struct {
 		name, token, method, path, auth string
@@ -42,13 +54,13 @@ func TestRoutes(t *testing.T) {
 		{"performed unknown", "secret", "POST", "/api/workouts/w-nope/performed", "", 404, ""},
 		{"spa index", "secret", "GET", "/", "", 200, "<title>Gym Rabbit"},
 		{"spa fallback", "secret", "GET", "/some/route", "", 200, "<title>Gym Rabbit"},
-		{"spa asset", "secret", "GET", "/assets/app.js", "", 200, "console.log"},
+		{"spa asset", "secret", "GET", "/app.js", "", 200, "console.log"},
 		{"mcp without auth", "secret", "POST", "/mcp", "", 401, ""},
 		{"mcp wrong token", "secret", "POST", "/mcp", "Bearer nope", 401, ""},
 		{"mcp disabled without token", "", "POST", "/mcp", "Bearer anything", 503, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			mux := newMux(database, nil, tc.token, dist)
+			mux := newMux(database, nil, tc.token, staticFS)
 			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader("{}"))
 			if tc.auth != "" {
 				req.Header.Set("Authorization", tc.auth)
@@ -61,10 +73,24 @@ func TestRoutes(t *testing.T) {
 			if !strings.Contains(rec.Body.String(), tc.body) {
 				t.Errorf("body %q does not contain %q", rec.Body.String(), tc.body)
 			}
+			if tc.method == "GET" && strings.HasPrefix(tc.name, "spa ") {
+				if got := rec.Header().Get("Cache-Control"); got != "no-cache" {
+					t.Errorf("Cache-Control = %q, want no-cache", got)
+				}
+			}
 		})
 	}
 
 	if got, _ := database.GetWorkout("w-1"); got.LastPerformed == "" {
 		t.Error("performed did not set last_performed")
+	}
+}
+
+func TestResolveStaticFS(t *testing.T) {
+	// From a directory without static/, falls back to embedded assets.
+	t.Chdir(t.TempDir())
+	fsys := resolveStaticFS()
+	if _, err := fs.Stat(fsys, "index.html"); err != nil {
+		t.Fatalf("expected embedded index.html fallback, got error: %v", err)
 	}
 }
